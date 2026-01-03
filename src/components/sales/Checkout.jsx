@@ -25,6 +25,32 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     { id: 'qr', label: 'QR', icon: QrCode, color: 'bg-yellow-500' },
   ];
 
+  // -------------------------------------
+  // Función para enviar la venta a Google Sheets
+  // -------------------------------------
+  const agregarVenta = async (venta) => {
+    try {
+      const response = await fetch(
+        "https://script.google.com/macros/s/AKfycbxmXJxyaUOq6KuPDD_3WYBXC8wsB46Oj78X-9RYgUju9-xLpv-nS7W2acm5rkZWd4zgvg/exec",
+        {
+          method: "POST",
+          body: JSON.stringify(venta),
+          headers: {
+            "Content-Type": "application/json"
+          }
+        }
+      );
+
+      const result = await response.json();
+      console.log("Venta agregada a Google Sheets:", result);
+    } catch (error) {
+      console.error("Error al agregar venta a Google Sheets:", error);
+    }
+  };
+
+  // -------------------------------------
+  // Función principal para procesar la venta
+  // -------------------------------------
   const handleCheckout = async () => {
     if (cart.length === 0) {
       toast.error('El carrito está vacío');
@@ -39,7 +65,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     setIsProcessing(true);
 
     try {
-      // 1. Crear la venta
+      // 1. Crear la venta en Supabase
       const { data: sale, error: saleError } = await supabase
         .from('sales')
         .insert({
@@ -54,7 +80,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
 
       if (saleError) throw saleError;
 
-      // 2. Crear los items de venta
+      // 2. Crear los items de venta en Supabase
       const saleItems = cart.map(item => ({
         sale_id: sale.id,
         product_id: item.id,
@@ -80,13 +106,28 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
         if (stockError) throw stockError;
       }
 
-      // 4. Éxito
+      // 4. Enviar venta a Google Sheets
+      await agregarVenta({
+        fecha: new Date().toLocaleString(),
+        customerName: customerName || 'Cliente ocasional',
+        customerEmail: customerEmail || '',
+        total: total,
+        paymentMethod: paymentMethod,
+        items: cart.map(item => ({
+          name: item.name,
+          quantity: item.quantity,
+          price: item.price,
+          subtotal: item.price * item.quantity
+        }))
+      });
+
+      // 5. Éxito
       toast.success(`Venta #${sale.sale_number} procesada exitosamente`);
-      
-      // 5. Imprimir recibo
+
+      // 6. Imprimir recibo
       printReceipt(sale, cart);
-      
-      // 6. Resetear y llamar callback
+
+      // 7. Resetear y llamar callback
       setCustomerName('');
       setCustomerEmail('');
       onSaleComplete();
@@ -99,6 +140,9 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     }
   };
 
+  // -------------------------------------
+  // Función para imprimir recibo
+  // -------------------------------------
   const printReceipt = (sale, cartItems) => {
     const receiptWindow = window.open('', '_blank');
     
@@ -197,6 +241,9 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     receiptWindow.print();
   };
 
+  // -------------------------------------
+  // Render del componente
+  // -------------------------------------
   return (
     <div className="card">
       <div className="flex items-center space-x-3 mb-6">
