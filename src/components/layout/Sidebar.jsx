@@ -1,18 +1,16 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { 
-  LayoutDashboard, 
-  ShoppingBag, 
-  Package, 
-  BarChart3, 
+import {
+  LayoutDashboard,
+  ShoppingBag,
+  Package,
+  BarChart3,
   User,
-  ChevronLeft,
-  ChevronRight
+  X
 } from 'lucide-react';
 
-const Sidebar = () => {
+const Sidebar = ({ isOpen, onClose }) => {
   const location = useLocation();
-  const [collapsed, setCollapsed] = useState(false);
 
   const menuItems = [
     { path: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
@@ -23,31 +21,33 @@ const Sidebar = () => {
   ];
 
   return (
-    <aside
-      className={`
-        ${collapsed ? 'w-20' : 'w-64'}
-        bg-white border-r border-gray-200
-        min-h-[calc(100vh-64px)]
-        transition-all duration-300 hidden lg:block
-      `}
-    >
-      <div className="h-full flex flex-col">
-        {/* Botón colapsar */}
-        <div className="p-4 border-b border-gray-200 flex justify-end">
-          <button
-            onClick={() => setCollapsed(!collapsed)}
-            className="p-2 hover:bg-gray-100 rounded-lg"
-          >
-            {collapsed ? (
-              <ChevronRight className="h-4 w-4 text-gray-600" />
-            ) : (
-              <ChevronLeft className="h-4 w-4 text-gray-600" />
-            )}
+    <>
+      {/* Overlay móvil */}
+      {isOpen && (
+        <div
+          className="fixed inset-0 bg-black/40 z-40 lg:hidden"
+          onClick={onClose}
+        />
+      )}
+
+      <aside
+        className={`
+          fixed lg:static inset-y-0 left-0 z-50
+          w-64 bg-white border-r border-gray-200
+          transform transition-transform duration-300
+          ${isOpen ? 'translate-x-0' : '-translate-x-full'}
+          lg:translate-x-0
+        `}
+      >
+        {/* Header móvil */}
+        <div className="p-4 border-b flex justify-between items-center lg:hidden">
+          <span className="font-semibold">Menú</span>
+          <button onClick={onClose}>
+            <X className="h-5 w-5" />
           </button>
         </div>
 
-        {/* Menú */}
-        <nav className="flex-1 p-4">
+        <nav className="p-4">
           <ul className="space-y-1">
             {menuItems.map((item) => {
               const Icon = item.icon;
@@ -57,43 +57,24 @@ const Sidebar = () => {
                 <li key={item.path}>
                   <Link
                     to={item.path}
+                    onClick={onClose}
                     className={`
-                      flex items-center
-                      ${collapsed ? 'justify-center' : 'space-x-3'}
-                      px-4 py-3 rounded-lg transition-colors relative
-                      ${
-                        isActive
-                          ? 'bg-blue-50 text-blue-600 font-medium'
-                          : 'text-gray-700 hover:bg-gray-100'
-                      }
+                      flex items-center space-x-3 px-4 py-3 rounded-lg
+                      ${isActive
+                        ? 'bg-blue-50 text-blue-600 font-medium'
+                        : 'text-gray-700 hover:bg-gray-100'}
                     `}
-                    title={collapsed ? item.label : ''}
                   >
                     <Icon className="h-5 w-5" />
-                    {!collapsed && <span>{item.label}</span>}
-
-                    {isActive && !collapsed && (
-                      <span className="absolute right-4 top-1/2 -translate-y-1/2">
-                        <span className="h-2 w-2 bg-blue-600 rounded-full block"></span>
-                      </span>
-                    )}
+                    <span>{item.label}</span>
                   </Link>
                 </li>
               );
             })}
           </ul>
         </nav>
-
-        {/* Versión */}
-        {!collapsed && (
-          <div className="p-4 border-t border-gray-200">
-            <p className="text-xs text-gray-500 text-center">
-              v1.0.0 • Caja Registradora Pro
-            </p>
-          </div>
-        )}
-      </div>
-    </aside>
+      </aside>
+    </>
   );
 };
 

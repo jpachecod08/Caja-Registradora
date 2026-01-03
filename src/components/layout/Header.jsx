@@ -13,11 +13,10 @@ import {
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
-const Header = () => {
+const Header = ({ setSidebarOpen }) => {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const [searchQuery, setSearchQuery] = React.useState('');
-  const [showMobileMenu, setShowMobileMenu] = React.useState(false);
 
   const handleLogout = async () => {
     await signOut();
@@ -38,19 +37,15 @@ const Header = () => {
     <header className="sticky top-0 z-50 bg-white border-b border-gray-200">
       <div className="px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16">
-          {/* Logo y título móvil */}
+          {/* Logo y botón hamburguesa móvil */}
           <div className="flex items-center">
             <button
-              onClick={() => setShowMobileMenu(!showMobileMenu)}
+              onClick={() => setSidebarOpen(true)}
               className="lg:hidden p-2 rounded-lg text-gray-600 hover:bg-gray-100 mr-2"
             >
-              {showMobileMenu ? (
-                <X className="h-5 w-5" />
-              ) : (
-                <Menu className="h-5 w-5" />
-              )}
+              <Menu className="h-5 w-5" />
             </button>
-            
+
             <Link to="/dashboard" className="flex items-center space-x-3">
               <div className="bg-blue-600 p-2 rounded-lg">
                 <ShoppingCart className="h-6 w-6 text-white" />
@@ -108,7 +103,7 @@ const Header = () => {
                   <p className="font-medium text-gray-900">{user?.email}</p>
                   <p className="text-sm text-gray-500">Sesión activa</p>
                 </div>
-                
+
                 <div className="p-2">
                   <Link
                     to="/profile"
@@ -117,7 +112,7 @@ const Header = () => {
                     <User className="h-4 w-4" />
                     <span>Mi Perfil</span>
                   </Link>
-                  
+
                   <Link
                     to="/settings"
                     className="flex items-center space-x-3 px-3 py-2 text-gray-700 hover:bg-gray-100 rounded-lg"
@@ -125,7 +120,7 @@ const Header = () => {
                     <Settings className="h-4 w-4" />
                     <span>Configuración</span>
                   </Link>
-                  
+
                   <button
                     onClick={handleLogout}
                     className="flex items-center space-x-3 px-3 py-2 text-red-600 hover:bg-red-50 w-full rounded-lg"
