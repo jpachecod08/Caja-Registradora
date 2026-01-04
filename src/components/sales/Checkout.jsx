@@ -31,7 +31,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
   const agregarVenta = async (venta) => {
   try {
     const response = await fetch(
-      "https://script.google.com/macros/s/AKfycbxwczLXHHoulNH0nOVS3Gr-3DBLWnnmztkslSFmdt39wt3FH8cTqLJAc7AMQA8UyCm5zw/exec",
+      "https://script.google.com/macros/s/AKfycbyiXWh7PDSKoSeGTA3yBXUvSTy3ww8kyY2HXJe588xrXga_TW4l6MVSlqz3Fu-b1sz3RQ/exec",
       {
         method: "POST",
         body: JSON.stringify(venta),
