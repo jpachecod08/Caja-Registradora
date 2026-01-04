@@ -29,24 +29,25 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
   // Función para enviar la venta a Google Sheets
   // -------------------------------------
   const agregarVenta = async (venta) => {
-    try {
-      const response = await fetch(
-        "https://script.google.com/macros/s/AKfycbxmXJxyaUOq6KuPDD_3WYBXC8wsB46Oj78X-9RYgUju9-xLpv-nS7W2acm5rkZWd4zgvg/exec",
-        {
-          method: "POST",
-          body: JSON.stringify(venta),
-          headers: {
-            "Content-Type": "application/json"
-          }
+  try {
+    const response = await fetch(
+      "https://script.google.com/macros/s/AKfycbxwczLXHHoulNH0nOVS3Gr-3DBLWnnmztkslSFmdt39wt3FH8cTqLJAc7AMQA8UyCm5zw/exec",
+      {
+        method: "POST",
+        body: JSON.stringify(venta),
+        headers: {
+          "Content-Type": "application/json"
         }
-      );
+      }
+    );
 
-      const result = await response.json();
-      console.log("Venta agregada a Google Sheets:", result);
-    } catch (error) {
-      console.error("Error al agregar venta a Google Sheets:", error);
-    }
-  };
+    const result = await response.json();
+    console.log("Venta agregada a Google Sheets:", result);
+  } catch (error) {
+    console.error("Error al agregar venta a Google Sheets:", error);
+  }
+};
+
 
   // -------------------------------------
   // Función principal para procesar la venta
