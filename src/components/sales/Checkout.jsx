@@ -26,28 +26,41 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
   ];
 
   // -------------------------------------
-  // Función para enviar la venta a Google Sheets
+  // Función para enviar la venta a Google Sheets VIA NETLIFY FUNCTION
   // -------------------------------------
   const agregarVenta = async (venta) => {
-  try {
-    const response = await fetch(
-      "https://script.google.com/macros/s/AKfycbyiXWh7PDSKoSeGTA3yBXUvSTy3ww8kyY2HXJe588xrXga_TW4l6MVSlqz3Fu-b1sz3RQ/exec",
-      {
+    try {
+      // Usar la Netlify Function en lugar de Google Script directo
+      const netlifyFunctionUrl = '/.netlify/functions/google-sheets';
+      
+      console.log("📤 Enviando a Google Sheets via Netlify Function:", venta);
+      
+      const response = await fetch(netlifyFunctionUrl, {
         method: "POST",
-        body: JSON.stringify(venta),
         headers: {
           "Content-Type": "application/json"
-        }
+        },
+        body: JSON.stringify(venta)
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
       }
-    );
 
-    const result = await response.json();
-    console.log("Venta agregada a Google Sheets:", result);
-  } catch (error) {
-    console.error("Error al agregar venta a Google Sheets:", error);
-  }
-};
-
+      const result = await response.json();
+      console.log("✅ Respuesta de Netlify Function:", result);
+      return result;
+      
+    } catch (error) {
+      console.error("❌ Error en Netlify Function:", error);
+      // No lanzar error, solo retornar objeto de error
+      return { 
+        success: false, 
+        error: error.message,
+        warning: "Venta guardada en Supabase pero falló Google Sheets"
+      };
+    }
+  };
 
   // -------------------------------------
   // Función principal para procesar la venta
@@ -107,9 +120,10 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
         if (stockError) throw stockError;
       }
 
-      // 4. Enviar venta a Google Sheets
-      await agregarVenta({
-        fecha: new Date().toLocaleString(),
+      // 4. Enviar venta a Google Sheets (no bloqueante, en segundo plano)
+      const sheetsData = {
+        saleId: sale.id,
+        saleNumber: sale.sale_number || `V-${sale.id}`,
         customerName: customerName || 'Cliente ocasional',
         customerEmail: customerEmail || '',
         total: total,
@@ -120,7 +134,24 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
           price: item.price,
           subtotal: item.price * item.quantity
         }))
-      });
+      };
+
+      // Enviar en segundo plano SIN esperar (non-blocking)
+      setTimeout(() => {
+        agregarVenta(sheetsData)
+          .then(result => {
+            if (result && result.success) {
+              console.log("✅ Google Sheets: Venta registrada en Excel");
+              toast.success("Venta guardada en Excel también");
+            } else {
+              console.warn("⚠️ Google Sheets: Error (pero venta completada en Supabase)");
+              // No mostrar toast de error para no confundir al usuario
+            }
+          })
+          .catch(err => {
+            console.warn("⚠️ Error Google Sheets (no crítico):", err);
+          });
+      }, 100); // Pequeño delay
 
       // 5. Éxito
       toast.success(`Venta #${sale.sale_number} procesada exitosamente`);
