@@ -11,7 +11,9 @@ import {
   Package, 
   AlertTriangle,
   MoreVertical,
-  Download
+  Download,
+  X,
+  Save
 } from 'lucide-react';
 
 const ProductManager = ({ viewMode = 'grid' }) => {
@@ -23,6 +25,18 @@ const ProductManager = ({ viewMode = 'grid' }) => {
   const [categories, setCategories] = useState([]);
   const [selectedProduct, setSelectedProduct] = useState(null);
   const [showActionsMenu, setShowActionsMenu] = useState(null);
+  const [editingProduct, setEditingProduct] = useState(null);
+  const [editForm, setEditForm] = useState({
+    name: '',
+    description: '',
+    price: 0,
+    cost: 0,
+    stock: 0,
+    min_stock: 0,
+    category: '',
+    sku: '',
+    barcode: ''
+  });
 
   useEffect(() => {
     fetchProducts();
@@ -74,6 +88,68 @@ const ProductManager = ({ viewMode = 'grid' }) => {
     }
     
     setFilteredProducts(filtered);
+  };
+
+  const handleEditClick = (product) => {
+    setEditingProduct(product.id);
+    setEditForm({
+      name: product.name || '',
+      description: product.description || '',
+      price: product.price || 0,
+      cost: product.cost || 0,
+      stock: product.stock || 0,
+      min_stock: product.min_stock || 0,
+      category: product.category || '',
+      sku: product.sku || '',
+      barcode: product.barcode || ''
+    });
+  };
+
+  const handleEditFormChange = (e) => {
+    const { name, value } = e.target;
+    setEditForm(prev => ({
+      ...prev,
+      [name]: name === 'price' || name === 'cost' || name === 'stock' || name === 'min_stock' 
+        ? parseFloat(value) || 0 
+        : value
+    }));
+  };
+
+  const handleEditSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!editingProduct) return;
+    
+    try {
+      const { error } = await supabase
+        .from('products')
+        .update(editForm)
+        .eq('id', editingProduct);
+      
+      if (error) throw error;
+      
+      toast.success('Producto actualizado exitosamente');
+      setEditingProduct(null);
+      fetchProducts();
+    } catch (error) {
+      console.error('Error updating product:', error);
+      toast.error('Error al actualizar producto');
+    }
+  };
+
+  const cancelEdit = () => {
+    setEditingProduct(null);
+    setEditForm({
+      name: '',
+      description: '',
+      price: 0,
+      cost: 0,
+      stock: 0,
+      min_stock: 0,
+      category: '',
+      sku: '',
+      barcode: ''
+    });
   };
 
   const toggleProductStatus = async (productId, currentStatus) => {
@@ -153,6 +229,176 @@ const ProductManager = ({ viewMode = 'grid' }) => {
 
   return (
     <div className="space-y-6">
+      {/* Modal de edición */}
+      {editingProduct && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between p-6 border-b">
+              <h2 className="text-xl font-semibold text-gray-900">Editar Producto</h2>
+              <button
+                onClick={cancelEdit}
+                className="p-2 hover:bg-gray-100 rounded-full"
+              >
+                <X className="h-5 w-5" />
+              </button>
+            </div>
+            
+            <form onSubmit={handleEditSubmit} className="p-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Nombre *
+                  </label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={editForm.name}
+                    onChange={handleEditFormChange}
+                    required
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Categoría
+                  </label>
+                  <input
+                    type="text"
+                    name="category"
+                    value={editForm.category}
+                    onChange={handleEditFormChange}
+                    list="categories-list"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                  <datalist id="categories-list">
+                    {categories.map(category => (
+                      <option key={category} value={category} />
+                    ))}
+                  </datalist>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Precio *
+                  </label>
+                  <input
+                    type="number"
+                    name="price"
+                    value={editForm.price}
+                    onChange={handleEditFormChange}
+                    required
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Costo
+                  </label>
+                  <input
+                    type="number"
+                    name="cost"
+                    value={editForm.cost}
+                    onChange={handleEditFormChange}
+                    min="0"
+                    step="0.01"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stock *
+                  </label>
+                  <input
+                    type="number"
+                    name="stock"
+                    value={editForm.stock}
+                    onChange={handleEditFormChange}
+                    required
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Stock Mínimo
+                  </label>
+                  <input
+                    type="number"
+                    name="min_stock"
+                    value={editForm.min_stock}
+                    onChange={handleEditFormChange}
+                    min="0"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Descripción
+                  </label>
+                  <textarea
+                    name="description"
+                    value={editForm.description}
+                    onChange={handleEditFormChange}
+                    rows="3"
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    SKU
+                  </label>
+                  <input
+                    type="text"
+                    name="sku"
+                    value={editForm.sku}
+                    onChange={handleEditFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Código de Barras
+                  </label>
+                  <input
+                    type="text"
+                    name="barcode"
+                    value={editForm.barcode}
+                    onChange={handleEditFormChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+              </div>
+              
+              <div className="flex justify-end space-x-3 mt-8 pt-6 border-t">
+                <button
+                  type="button"
+                  onClick={cancelEdit}
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                >
+                  <Save className="h-4 w-4 mr-2" />
+                  Guardar Cambios
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Filtros */}
       <div className="card">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -221,6 +467,12 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                     
                     {showActionsMenu === product.id && (
                       <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                        <button
+                          onClick={() => handleEditClick(product)}
+                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
+                        >
+                          Editar
+                        </button>
                         <button
                           onClick={() => toggleProductStatus(product.id, product.is_active)}
                           className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
@@ -381,7 +633,7 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                       <td className="py-4 px-4">
                         <div className="flex items-center space-x-2">
                           <button
-                            onClick={() => {/* Editar */}}
+                            onClick={() => handleEditClick(product)}
                             className="p-1 text-blue-600 hover:text-blue-800"
                           >
                             <Edit className="h-4 w-4" />
