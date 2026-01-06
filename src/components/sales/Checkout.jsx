@@ -91,13 +91,13 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
       // Calcular total con domicilio
       const totalWithDelivery = total + parseFloat(deliveryFee || 0);
 
-      // 1. Crear la venta en Supabase con los nuevos campos
+      // 1. Crear la venta en Supabase - CORREGIDO: usar 'address' en lugar de 'customer_address'
       const { data: sale, error: saleError } = await supabase
         .from('sales')
         .insert({
           customer_name: customerName || 'Cliente ocasional',
-          customer_phone: customerPhone || null,
-          customer_address: customerAddress || null,
+          phone: customerPhone || null,
+          address: customerAddress || null, // Cambiado de customer_address a address
           account_type: accountType,
           product_state: productState,
           delivery_fee: parseFloat(deliveryFee || 0),
@@ -118,7 +118,6 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
         quantity: item.quantity,
         unit_price: item.price,
         subtotal: item.price * item.quantity,
-        // Si quieres guardar el estado del producto por item:
         product_state: productState,
       }));
 
@@ -470,7 +469,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
                         ? 'border-red-500 bg-red-50 text-red-700'
                         : 'border-blue-500 bg-blue-50 text-blue-700'
                       : 'border-gray-300 hover:border-gray-400'
-                  }`}
+                }`}
                 >
                   <Icon className="h-5 w-5 mb-2" />
                   <span className="text-sm font-medium">{state.label}</span>
