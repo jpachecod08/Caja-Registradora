@@ -111,24 +111,35 @@ const Dashboard = () => {
 
   const loadSaleItems = async (saleId) => {
     try {
+      console.log('🔍 Buscando items para sale_id:', saleId);
+      
       const { data: items, error } = await supabase
         .from('sale_items')
         .select('*')
         .eq('sale_id', saleId);
 
-      if (error) throw error;
+      if (error) {
+        console.error('❌ Error en consulta de items:', error);
+        throw error;
+      }
+      
+      console.log('✅ Items encontrados:', items);
       return items || [];
+      
     } catch (error) {
-      console.error('Error cargando items:', error);
+      console.error('❌ Error cargando items:', error);
+      toast.error('Error al cargar productos de la venta');
       return [];
     }
   };
 
   const showSaleDetails = async (sale) => {
+    console.log('🔄 Mostrando detalles de venta:', sale.id);
     setSelectedSale(sale);
     
     // Cargar los items de la venta
     const items = await loadSaleItems(sale.id);
+    console.log('📦 Items cargados para modal:', items);
     setSelectedSaleItems(items);
   };
 
@@ -703,9 +714,9 @@ const Dashboard = () => {
                   </div>
                 ) : (
                   <div className="text-center py-8">
-                    <p className="text-gray-500 mb-2">No hay productos registrados para esta venta</p>
+                    <p className="text-gray-500 mb-2">Cargando productos...</p>
                     <p className="text-sm text-gray-400">
-                      Los productos deberían estar en la tabla "sale_items" con sale_id: {selectedSale.id}
+                      Buscando productos para venta #{selectedSale.sale_number}
                     </p>
                   </div>
                 )}
