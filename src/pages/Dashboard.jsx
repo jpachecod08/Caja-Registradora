@@ -16,7 +16,8 @@ import {
   Eye,
   X,
   CheckCircle,
-  Clock
+  Clock,
+  Printer  // Agregado: Icono para imprimir recibo
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -106,6 +107,192 @@ const Dashboard = () => {
       toast.error('Error al cargar el dashboard');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Función para imprimir recibo de una venta
+  const printSaleReceipt = async (sale) => {
+    try {
+      // 1. Cargar los items de la venta
+      const { data: saleItems, error } = await supabase
+        .from('sale_items')
+        .select('*')
+        .eq('sale_id', sale.id);
+      
+      if (error) throw error;
+      
+      // 2. Calcular totales
+      const subtotal = saleItems.reduce((sum, item) => sum + item.subtotal, 0);
+      const totalWithDelivery = subtotal + (sale.delivery_fee || 0);
+      
+      // 3. Crear el HTML del recibo
+      const receiptWindow = window.open('', '_blank');
+      
+      const receiptHTML = `
+        <html>
+          <head>
+            <title>Recibo #${sale.sale_number}</title>
+            <style>
+              body { 
+                font-family: 'Courier New', monospace; 
+                width: 80mm;
+                padding: 10px;
+                margin: 0;
+              }
+              .header { 
+                text-align: center; 
+                margin-bottom: 15px;
+                padding-bottom: 10px;
+                border-bottom: 1px dashed #000;
+              }
+              .item { 
+                display: flex; 
+                justify-content: space-between; 
+                margin: 5px 0;
+                font-size: 12px;
+              }
+              .item-detail {
+                display: flex;
+                flex-direction: column;
+              }
+              .subtotal { 
+                border-top: 1px solid #000; 
+                margin-top: 10px; 
+                padding-top: 10px;
+              }
+              .total { 
+                border-top: 2px solid #000; 
+                margin-top: 10px; 
+                padding-top: 10px;
+                font-weight: bold;
+              }
+              .footer {
+                text-align: center;
+                margin-top: 20px;
+                font-size: 10px;
+                color: #666;
+              }
+              .separator {
+                border-top: 1px dashed #ccc;
+                margin: 10px 0;
+              }
+              .badge {
+                display: inline-block;
+                padding: 2px 6px;
+                border-radius: 4px;
+                font-size: 10px;
+                font-weight: bold;
+                margin-left: 5px;
+              }
+              .badge-credito {
+                background: #fef3c7;
+                color: #92400e;
+              }
+              .badge-frito {
+                background: #fee2e2;
+                color: #991b1b;
+              }
+              .badge-congelado {
+                background: #dbeafe;
+                color: #1e40af;
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <h2 style="margin: 0">CAJA REGISTRADORA</h2>
+              <p style="margin: 5px 0">Recibo #${sale.sale_number}</p>
+              <p style="margin: 5px 0">${new Date(sale.created_at).toLocaleString('es-CO')}</p>
+            </div>
+            
+            <div class="separator"></div>
+            
+            ${saleItems.map(item => `
+              <div class="item">
+                <div class="item-detail">
+                  <div>${item.product_name}</div>
+                  <div>${item.quantity} x $${item.unit_price.toFixed(2)}</div>
+                  <div>
+                    <span class="badge badge-${sale.product_state}">${sale.product_state === 'frito' ? 'FRITO' : 'CONGELADO'}</span>
+                  </div>
+                </div>
+                <div>$${item.subtotal.toFixed(2)}</div>
+              </div>
+            `).join('')}
+            
+            <div class="separator"></div>
+            
+            <div class="item subtotal">
+              <div>Subtotal</div>
+              <div>$${subtotal.toFixed(2)}</div>
+            </div>
+            
+            ${sale.delivery_fee > 0 ? `
+              <div class="item">
+                <div>Domicilio</div>
+                <div>$${parseFloat(sale.delivery_fee).toFixed(2)}</div>
+              </div>
+            ` : ''}
+            
+            <div class="item total">
+              <div>TOTAL</div>
+              <div>$${totalWithDelivery.toFixed(2)}</div>
+            </div>
+            
+            <div class="separator"></div>
+            
+            <div class="item">
+              <div>Método de pago:</div>
+              <div>${sale.payment_method === 'cash' ? 'Efectivo' : 'Transferencia'}</div>
+            </div>
+            
+            <div class="item">
+              <div>Tipo de cuenta:</div>
+              <div>
+                ${sale.account_type === 'credito' ? 'Crédito' : 'Contado'}
+                ${sale.account_type === 'credito' ? '<span class="badge badge-credito">CRÉDITO</span>' : ''}
+              </div>
+            </div>
+            
+            ${sale.customer_name ? `
+              <div class="item">
+                <div>Cliente:</div>
+                <div>${sale.customer_name}</div>
+              </div>
+            ` : ''}
+            
+            ${sale.phone ? `
+              <div class="item">
+                <div>Teléfono:</div>
+                <div>${sale.phone}</div>
+              </div>
+            ` : ''}
+            
+            ${sale.address ? `
+              <div class="item">
+                <div>Dirección:</div>
+                <div>${sale.address}</div>
+              </div>
+            ` : ''}
+            
+            <div class="footer">
+              <p>¡Gracias por su compra!</p>
+              <p>Vuelva pronto</p>
+              <p>${new Date().getFullYear()} © Caja Registradora</p>
+            </div>
+          </body>
+        </html>
+      `;
+      
+      receiptWindow.document.write(receiptHTML);
+      receiptWindow.document.close();
+      
+      // Mostrar mensaje de éxito
+      toast.success(`Recibo #${sale.sale_number} generado. Se abrirá en una nueva ventana.`);
+      
+    } catch (error) {
+      console.error('Error generando recibo:', error);
+      toast.error('Error al generar el recibo: ' + error.message);
     }
   };
 
@@ -461,6 +648,10 @@ const Dashboard = () => {
                     )}
                   </div>
                 </th>
+                {/* NUEVA COLUMNA: Recibo */}
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Recibo
+                </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Acciones
                 </th>
@@ -469,7 +660,7 @@ const Dashboard = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan="8" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
                     No se encontraron ventas
                   </td>
                 </tr>
@@ -524,13 +715,24 @@ const Dashboard = () => {
                         {formatDate(sale.created_at)}
                       </div>
                     </td>
+                    {/* NUEVA CELDA: Botón para imprimir recibo */}
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <button
+                        onClick={() => printSaleReceipt(sale)}
+                        className="text-green-600 hover:text-green-900 flex items-center gap-1 px-3 py-1 border border-green-200 rounded-lg hover:bg-green-50 transition-colors"
+                        title="Imprimir recibo de esta venta"
+                      >
+                        <Printer className="h-4 w-4" />
+                        <span className="text-sm font-medium">Imprimir</span>
+                      </button>
+                    </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => showSaleDetails(sale)}
-                        className="text-blue-600 hover:text-blue-900 flex items-center gap-1"
+                        className="text-blue-600 hover:text-blue-900 flex items-center gap-1 px-3 py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
                       >
                         <Eye className="h-4 w-4" />
-                        Ver detalles
+                        <span className="text-sm font-medium">Detalles</span>
                       </button>
                     </td>
                   </tr>

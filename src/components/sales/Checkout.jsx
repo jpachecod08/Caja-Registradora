@@ -201,7 +201,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
       }
 
       // 6. Imprimir recibo
-      printReceipt(sale, cart, totalWithDelivery);
+      // printReceipt(sale, cart, totalWithDelivery);
 
       // 7. Resetear y llamar callback
       resetForm();
