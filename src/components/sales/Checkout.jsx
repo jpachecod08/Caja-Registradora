@@ -91,13 +91,13 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
       // Calcular total con domicilio
       const totalWithDelivery = total + parseFloat(deliveryFee || 0);
 
-      // 1. Crear la venta en Supabase - CORREGIDO: usar 'address' en lugar de 'customer_address'
+      // 1. Crear la venta en Supabase
       const { data: sale, error: saleError } = await supabase
         .from('sales')
         .insert({
           customer_name: customerName || 'Cliente ocasional',
           phone: customerPhone || null,
-          address: customerAddress || null, // Cambiado de customer_address a address
+          address: customerAddress || null,
           account_type: accountType,
           product_state: productState,
           delivery_fee: parseFloat(deliveryFee || 0),
@@ -110,7 +110,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
 
       if (saleError) throw saleError;
 
-      // 2. Crear los items de venta en Supabase
+      // 2. Crear los items de venta en Supabase - CORREGIDO: quitar product_state
       const saleItems = cart.map(item => ({
         sale_id: sale.id,
         product_id: item.id,
@@ -118,7 +118,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
         quantity: item.quantity,
         unit_price: item.price,
         subtotal: item.price * item.quantity,
-        product_state: productState,
+        // NOTA: product_state está en la tabla sales, no en sale_items
       }));
 
       const { error: itemsError } = await supabase
@@ -156,7 +156,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
           name: item.name,
           quantity: item.quantity,
           price: item.price,
-          state: productState,
+          state: productState, // Esto sigue siendo para Google Sheets
           subtotal: item.price * item.quantity
         }))
       };
@@ -469,7 +469,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
                         ? 'border-red-500 bg-red-50 text-red-700'
                         : 'border-blue-500 bg-blue-50 text-blue-700'
                       : 'border-gray-300 hover:border-gray-400'
-                }`}
+                  }`}
                 >
                   <Icon className="h-5 w-5 mb-2" />
                   <span className="text-sm font-medium">{state.label}</span>
