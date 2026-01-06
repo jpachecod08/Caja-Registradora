@@ -194,43 +194,51 @@ const Dashboard = () => {
     }).format(amount);
   };
 
-  const getAccountTypeBadge = (type) => {
+  const AccountTypeBadge = ({ type }) => {
     const config = {
       contado: { color: 'bg-green-100 text-green-800', icon: CheckCircle },
       credito: { color: 'bg-yellow-100 text-yellow-800', icon: Clock }
     };
-    const { color, icon: Icon } = config[type] || { color: 'bg-gray-100 text-gray-800', icon: CreditCard };
+    
+    const configItem = config[type] || { color: 'bg-gray-100 text-gray-800', icon: CreditCard };
+    const Icon = configItem.icon || CreditCard;
+    
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${color}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${configItem.color}`}>
         <Icon className="h-3 w-3" />
-        {type === 'contado' ? 'Contado' : 'Crédito'}
+        {type === 'contado' ? 'Contado' : type === 'credito' ? 'Crédito' : type || 'No especificado'}
       </span>
     );
   };
 
-  const getPaymentMethodBadge = (method) => {
+  const PaymentMethodBadge = ({ method }) => {
     const config = {
       cash: { color: 'bg-green-100 text-green-800', label: 'Efectivo', icon: DollarSign },
       transfer: { color: 'bg-purple-100 text-purple-800', label: 'Transferencia', icon: Wallet }
     };
-    const { color, label, icon: Icon } = config[method] || { color: 'bg-gray-100 text-gray-800', label: method };
+    
+    const configItem = config[method] || { color: 'bg-gray-100 text-gray-800', label: method || 'No especificado', icon: CreditCard };
+    const Icon = configItem.icon || CreditCard;
+    
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${color}`}>
+      <span className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${configItem.color}`}>
         <Icon className="h-3 w-3" />
-        {label}
+        {configItem.label}
       </span>
     );
   };
 
-  const getProductStateBadge = (state) => {
+  const ProductStateBadge = ({ state }) => {
     const config = {
       frito: { color: 'bg-red-100 text-red-800', label: 'Frito' },
       congelado: { color: 'bg-blue-100 text-blue-800', label: 'Congelado' }
     };
-    const { color, label } = config[state] || { color: 'bg-gray-100 text-gray-800', label: state };
+    
+    const configItem = config[state] || { color: 'bg-gray-100 text-gray-800', label: state || 'No especificado' };
+    
     return (
-      <span className={`px-2 py-1 rounded-full text-xs font-medium ${color}`}>
-        {label}
+      <span className={`px-2 py-1 rounded-full text-xs font-medium ${configItem.color}`}>
+        {configItem.label}
       </span>
     );
   };
@@ -308,12 +316,15 @@ const Dashboard = () => {
             
             <button 
               className="px-4 py-2 border rounded-lg flex items-center gap-2 hover:bg-gray-50"
-              onClick={() => setFilters({
-                accountType: 'all',
-                paymentMethod: 'all',
-                productState: 'all',
-                status: 'all'
-              })}
+              onClick={() => {
+                setFilters({
+                  accountType: 'all',
+                  paymentMethod: 'all',
+                  productState: 'all',
+                  status: 'all'
+                });
+                setSearchTerm('');
+              }}
             >
               <Filter className="h-4 w-4" />
               Limpiar filtros
@@ -404,7 +415,7 @@ const Dashboard = () => {
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('phone')}>
                   Teléfono
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('account_type')}>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tipo Cuenta
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
@@ -467,12 +478,12 @@ const Dashboard = () => {
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      {getAccountTypeBadge(sale.account_type)}
+                      <AccountTypeBadge type={sale.account_type} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
-                        {getPaymentMethodBadge(sale.payment_method)}
-                        {getProductStateBadge(sale.product_state)}
+                        <PaymentMethodBadge method={sale.payment_method} />
+                        <ProductStateBadge state={sale.product_state} />
                         {sale.delivery_fee > 0 && (
                           <div className="text-xs text-gray-500">
                             Domicilio: {formatCurrency(sale.delivery_fee)}
@@ -593,15 +604,15 @@ const Dashboard = () => {
                   <div className="space-y-3">
                     <div className="flex justify-between">
                       <span className="text-gray-600">Tipo de cuenta:</span>
-                      {getAccountTypeBadge(selectedSale.account_type)}
+                      <AccountTypeBadge type={selectedSale.account_type} />
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Método de pago:</span>
-                      {getPaymentMethodBadge(selectedSale.payment_method)}
+                      <PaymentMethodBadge method={selectedSale.payment_method} />
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Estado producto:</span>
-                      {getProductStateBadge(selectedSale.product_state)}
+                      <ProductStateBadge state={selectedSale.product_state} />
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Domicilio:</span>
@@ -616,11 +627,13 @@ const Dashboard = () => {
                       <span className={`font-medium ${
                         selectedSale.status === 'completed' ? 'text-green-600' :
                         selectedSale.status === 'pending' ? 'text-yellow-600' :
-                        'text-red-600'
+                        selectedSale.status === 'cancelled' ? 'text-red-600' :
+                        'text-gray-600'
                       }`}>
                         {selectedSale.status === 'completed' ? 'Completada' :
                          selectedSale.status === 'pending' ? 'Pendiente' :
-                         'Cancelada'}
+                         selectedSale.status === 'cancelled' ? 'Cancelada' :
+                         selectedSale.status || 'No especificado'}
                       </span>
                     </div>
                   </div>
@@ -630,48 +643,52 @@ const Dashboard = () => {
               {/* Productos de la venta */}
               <div className="card">
                 <h4 className="text-lg font-semibold mb-4">Productos Vendidos</h4>
-                <div className="overflow-x-auto">
-                  <table className="min-w-full divide-y divide-gray-200">
-                    <thead className="bg-gray-50">
-                      <tr>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Precio Unitario</th>
-                        <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-200">
-                      {selectedSale.sale_items?.map((item, index) => (
-                        <tr key={index}>
-                          <td className="px-4 py-3">{item.product_name}</td>
-                          <td className="px-4 py-3">{item.quantity}</td>
-                          <td className="px-4 py-3">{formatCurrency(item.unit_price)}</td>
-                          <td className="px-4 py-3 font-medium">{formatCurrency(item.subtotal)}</td>
+                {selectedSale.sale_items && selectedSale.sale_items.length > 0 ? (
+                  <div className="overflow-x-auto">
+                    <table className="min-w-full divide-y divide-gray-200">
+                      <thead className="bg-gray-50">
+                        <tr>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Precio Unitario</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
                         </tr>
-                      ))}
-                    </tbody>
-                    <tfoot className="bg-gray-50">
-                      <tr>
-                        <td colSpan="3" className="px-4 py-3 text-right font-semibold">Subtotal:</td>
-                        <td className="px-4 py-3 font-bold">
-                          {formatCurrency(selectedSale.total_amount - selectedSale.delivery_fee)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan="3" className="px-4 py-3 text-right font-semibold">Domicilio:</td>
-                        <td className="px-4 py-3 font-bold">
-                          {formatCurrency(selectedSale.delivery_fee)}
-                        </td>
-                      </tr>
-                      <tr>
-                        <td colSpan="3" className="px-4 py-3 text-right font-semibold text-lg">TOTAL:</td>
-                        <td className="px-4 py-3 font-bold text-lg text-blue-600">
-                          {formatCurrency(selectedSale.total_amount)}
-                        </td>
-                      </tr>
-                    </tfoot>
-                  </table>
-                </div>
+                      </thead>
+                      <tbody className="divide-y divide-gray-200">
+                        {selectedSale.sale_items.map((item, index) => (
+                          <tr key={index}>
+                            <td className="px-4 py-3">{item.product_name}</td>
+                            <td className="px-4 py-3">{item.quantity}</td>
+                            <td className="px-4 py-3">{formatCurrency(item.unit_price)}</td>
+                            <td className="px-4 py-3 font-medium">{formatCurrency(item.subtotal)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                      <tfoot className="bg-gray-50">
+                        <tr>
+                          <td colSpan="3" className="px-4 py-3 text-right font-semibold">Subtotal:</td>
+                          <td className="px-4 py-3 font-bold">
+                            {formatCurrency(selectedSale.total_amount - (selectedSale.delivery_fee || 0))}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan="3" className="px-4 py-3 text-right font-semibold">Domicilio:</td>
+                          <td className="px-4 py-3 font-bold">
+                            {formatCurrency(selectedSale.delivery_fee || 0)}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td colSpan="3" className="px-4 py-3 text-right font-semibold text-lg">TOTAL:</td>
+                          <td className="px-4 py-3 font-bold text-lg text-blue-600">
+                            {formatCurrency(selectedSale.total_amount)}
+                          </td>
+                        </tr>
+                      </tfoot>
+                    </table>
+                  </div>
+                ) : (
+                  <p className="text-gray-500 text-center py-4">No hay productos registrados para esta venta</p>
+                )}
               </div>
             </div>
           </div>
@@ -681,31 +698,37 @@ const Dashboard = () => {
   );
 };
 
-const StatCard = ({ title, value, icon: Icon, subtitle, alert, trend }) => (
-  <div className={`card ${alert ? 'border-red-200 bg-red-50' : ''}`}>
-    <div className="flex items-center justify-between">
-      <div>
-        <p className="text-sm text-gray-500">{title}</p>
-        <p className={`text-2xl font-bold ${alert ? 'text-red-600' : 'text-gray-900'}`}>
-          {value}
-        </p>
-        {subtitle && (
-          <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
-        )}
-      </div>
-      <div className={`p-3 rounded-xl ${
-        alert ? 'bg-red-100' : 
-        trend === 'daily' ? 'bg-green-100' : 
-        'bg-blue-100'
-      }`}>
-        <Icon className={`h-6 w-6 ${
-          alert ? 'text-red-600' : 
-          trend === 'daily' ? 'text-green-600' : 
-          'text-blue-600'
-        }`} />
+const StatCard = ({ title, value, icon: Icon, subtitle, alert, trend }) => {
+  if (!Icon) {
+    Icon = DollarSign; // Icono por defecto
+  }
+  
+  return (
+    <div className={`card ${alert ? 'border-red-200 bg-red-50' : ''}`}>
+      <div className="flex items-center justify-between">
+        <div>
+          <p className="text-sm text-gray-500">{title}</p>
+          <p className={`text-2xl font-bold ${alert ? 'text-red-600' : 'text-gray-900'}`}>
+            {value}
+          </p>
+          {subtitle && (
+            <p className="text-xs text-gray-500 mt-1">{subtitle}</p>
+          )}
+        </div>
+        <div className={`p-3 rounded-xl ${
+          alert ? 'bg-red-100' : 
+          trend === 'daily' ? 'bg-green-100' : 
+          'bg-blue-100'
+        }`}>
+          <Icon className={`h-6 w-6 ${
+            alert ? 'text-red-600' : 
+            trend === 'daily' ? 'text-green-600' : 
+            'text-blue-600'
+          }`} />
+        </div>
       </div>
     </div>
-  </div>
-);
+  );
+};
 
 export default Dashboard;
