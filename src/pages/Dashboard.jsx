@@ -34,6 +34,7 @@ const Dashboard = () => {
   const [sales, setSales] = useState([]);
   const [filteredSales, setFilteredSales] = useState([]);
   const [selectedSale, setSelectedSale] = useState(null);
+  const [selectedSaleItems, setSelectedSaleItems] = useState([]);
   const [searchTerm, setSearchTerm] = useState('');
   const [filters, setFilters] = useState({
     accountType: 'all',
@@ -66,7 +67,7 @@ const Dashboard = () => {
         productsRes,
         todaySalesRes,
         allSalesRes,
-        salesDataRes
+        salesRes
       ] = await Promise.all([
         supabase.from('products').select('stock, min_stock, is_active'),
         supabase
@@ -77,22 +78,14 @@ const Dashboard = () => {
         supabase.from('sales').select('*'),
         supabase
           .from('sales')
-          .select(`
-            *,
-            sale_items (
-              product_name,
-              quantity,
-              unit_price,
-              subtotal
-            )
-          `)
+          .select('*')
           .order('created_at', { ascending: false })
       ]);
 
       const products = productsRes.data || [];
       const salesToday = todaySalesRes.data || [];
       const allSales = allSalesRes.data || [];
-      const salesWithItems = salesDataRes.data || [];
+      const salesData = salesRes.data || [];
 
       setStats({
         todaySales: salesToday.length,
@@ -105,8 +98,8 @@ const Dashboard = () => {
         totalRevenue: allSales.reduce((sum, s) => sum + s.total_amount, 0)
       });
 
-      setSales(salesWithItems);
-      setFilteredSales(salesWithItems);
+      setSales(salesData);
+      setFilteredSales(salesData);
 
     } catch (error) {
       console.error(error);
@@ -114,6 +107,29 @@ const Dashboard = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const loadSaleItems = async (saleId) => {
+    try {
+      const { data: items, error } = await supabase
+        .from('sale_items')
+        .select('*')
+        .eq('sale_id', saleId);
+
+      if (error) throw error;
+      return items || [];
+    } catch (error) {
+      console.error('Error cargando items:', error);
+      return [];
+    }
+  };
+
+  const showSaleDetails = async (sale) => {
+    setSelectedSale(sale);
+    
+    // Cargar los items de la venta
+    const items = await loadSaleItems(sale.id);
+    setSelectedSaleItems(items);
   };
 
   const applyFiltersAndSearch = () => {
@@ -250,10 +266,6 @@ const Dashboard = () => {
   const totalPages = Math.ceil(filteredSales.length / itemsPerPage);
 
   const paginate = (pageNumber) => setCurrentPage(pageNumber);
-
-  const showSaleDetails = (sale) => {
-    setSelectedSale(sale);
-  };
 
   if (loading) {
     return (
@@ -568,7 +580,10 @@ const Dashboard = () => {
                   Detalles de Venta #{selectedSale.sale_number}
                 </h3>
                 <button
-                  onClick={() => setSelectedSale(null)}
+                  onClick={() => {
+                    setSelectedSale(null);
+                    setSelectedSaleItems([]);
+                  }}
                   className="text-gray-400 hover:text-gray-600"
                 >
                   <X className="h-6 w-6" />
@@ -643,7 +658,7 @@ const Dashboard = () => {
               {/* Productos de la venta */}
               <div className="card">
                 <h4 className="text-lg font-semibold mb-4">Productos Vendidos</h4>
-                {selectedSale.sale_items && selectedSale.sale_items.length > 0 ? (
+                {selectedSaleItems.length > 0 ? (
                   <div className="overflow-x-auto">
                     <table className="min-w-full divide-y divide-gray-200">
                       <thead className="bg-gray-50">
@@ -655,7 +670,7 @@ const Dashboard = () => {
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
-                        {selectedSale.sale_items.map((item, index) => (
+                        {selectedSaleItems.map((item, index) => (
                           <tr key={index}>
                             <td className="px-4 py-3">{item.product_name}</td>
                             <td className="px-4 py-3">{item.quantity}</td>
@@ -687,7 +702,12 @@ const Dashboard = () => {
                     </table>
                   </div>
                 ) : (
-                  <p className="text-gray-500 text-center py-4">No hay productos registrados para esta venta</p>
+                  <div className="text-center py-8">
+                    <p className="text-gray-500 mb-2">No hay productos registrados para esta venta</p>
+                    <p className="text-sm text-gray-400">
+                      Los productos deberían estar en la tabla "sale_items" con sale_id: {selectedSale.id}
+                    </p>
+                  </div>
                 )}
               </div>
             </div>
