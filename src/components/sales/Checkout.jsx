@@ -46,7 +46,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     try {
       const netlifyFunctionUrl = '/.netlify/functions/google-sheets';
       
-      console.log("📤 Enviando a Google Sheets:", venta);
+      console.log("📤 Enviando a Google Sheets con formato organizado:", venta);
       
       const response = await fetch(netlifyFunctionUrl, {
         method: "POST",
@@ -110,7 +110,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
 
       if (saleError) throw saleError;
 
-      // 2. Crear los items de venta en Supabase - CORREGIDO: quitar product_state
+      // 2. Crear los items de venta en Supabase
       const saleItems = cart.map(item => ({
         sale_id: sale.id,
         product_id: item.id,
@@ -118,7 +118,6 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
         quantity: item.quantity,
         unit_price: item.price,
         subtotal: item.price * item.quantity,
-        // NOTA: product_state está en la tabla sales, no en sale_items
       }));
 
       const { error: itemsError } = await supabase
@@ -139,33 +138,55 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
         }
       }
 
-      // 4. Enviar venta a Google Sheets
+      // 4. Preparar datos para Google Sheets - FORMATO ORGANIZADO
+      const formattedItems = cart.map(item => 
+        `${item.name} x${item.quantity} ($${item.price.toFixed(2)} c/u)`
+      ).join('; ');
+
       const sheetsData = {
-        saleId: sale.id,
-        saleNumber: sale.sale_number || `V-${sale.id}`,
-        customerName: customerName || 'Cliente ocasional',
-        customerPhone: customerPhone || '',
-        customerAddress: customerAddress || '',
-        accountType: accountType,
-        productState: productState,
-        deliveryFee: parseFloat(deliveryFee || 0),
+        // Información de la venta
+        fechaHora: new Date().toLocaleString('es-CO'),
+        numeroVenta: sale.sale_number || `V-${sale.id}`,
+        idVenta: sale.id,
+        
+        // Información del cliente
+        nombreCliente: customerName || 'Cliente ocasional',
+        telefonoCliente: customerPhone || '',
+        direccionCliente: customerAddress || '',
+        
+        // Detalles de la venta
+        tipoCuenta: accountType === 'credito' ? 'CRÉDITO' : 'CONTADO',
+        estadoProducto: productState === 'frito' ? 'FRITO' : 'CONGELADO',
+        metodoPago: paymentMethod === 'cash' ? 'EFECTIVO' : 'TRANSFERENCIA',
+        
+        // Valores monetarios
         subtotal: total,
-        total: totalWithDelivery,
-        paymentMethod: paymentMethod,
-        items: cart.map(item => ({
-          name: item.name,
-          quantity: item.quantity,
-          price: item.price,
-          state: productState, // Esto sigue siendo para Google Sheets
-          subtotal: item.price * item.quantity
+        valorDomicilio: parseFloat(deliveryFee || 0),
+        totalVenta: totalWithDelivery,
+        
+        // Productos (formateados)
+        productos: formattedItems,
+        cantidadTotal: cart.reduce((sum, item) => sum + item.quantity, 0),
+        
+        // Items detallados para referencia
+        itemsDetallados: cart.map(item => ({
+          nombre: item.name,
+          cantidad: item.quantity,
+          precioUnitario: item.price,
+          subtotalItem: item.price * item.quantity,
+          estado: productState
         }))
       };
 
+      console.log("📊 Datos para Google Sheets:", sheetsData);
+
+      // Enviar a Google Sheets
       setTimeout(() => {
         agregarVenta(sheetsData)
           .then(result => {
             if (result && result.success) {
-              console.log("✅ Google Sheets: Venta registrada");
+              console.log("✅ Google Sheets: Venta registrada de forma organizada");
+              toast.success("Venta registrada en Excel correctamente");
             }
           })
           .catch(err => {
