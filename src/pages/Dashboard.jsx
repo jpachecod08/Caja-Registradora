@@ -17,7 +17,10 @@ import {
   X,
   CheckCircle,
   Clock,
-  Printer  // Agregado: Icono para imprimir recibo
+  Printer,
+  Edit,
+  Save,
+  Trash2
 } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -41,12 +44,23 @@ const Dashboard = () => {
     accountType: 'all',
     paymentMethod: 'all',
     productState: 'all',
-    status: 'all'
+    paymentStatus: 'all'
   });
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage] = useState(10);
   const [sortField, setSortField] = useState('created_at');
   const [sortDirection, setSortDirection] = useState('desc');
+  const [editingSale, setEditingSale] = useState(null);
+  const [editForm, setEditForm] = useState({
+    customer_name: '',
+    phone: '',
+    address: '',
+    total_amount: 0,
+    payment_status: 'pending',
+    account_type: 'contado',
+    delivery_fee: 0,
+    product_state: 'congelado'
+  });
 
   useEffect(() => {
     loadDashboard();
@@ -73,7 +87,7 @@ const Dashboard = () => {
         supabase.from('products').select('stock, min_stock, is_active'),
         supabase
           .from('sales')
-          .select('total_amount')
+          .select('total_amount, payment_status')
           .gte('created_at', start)
           .lte('created_at', end),
         supabase.from('sales').select('*'),
@@ -88,9 +102,13 @@ const Dashboard = () => {
       const allSales = allSalesRes.data || [];
       const salesData = salesRes.data || [];
 
+      const todayPaidRevenue = salesToday
+        .filter(sale => sale.payment_status === 'paid')
+        .reduce((sum, s) => sum + s.total_amount, 0);
+
       setStats({
         todaySales: salesToday.length,
-        todayRevenue: salesToday.reduce((sum, s) => sum + s.total_amount, 0),
+        todayRevenue: todayPaidRevenue,
         activeProducts: products.filter(p => p.is_active).length,
         lowStockProducts: products.filter(
           p => p.stock <= p.min_stock && p.stock > 0
@@ -131,7 +149,7 @@ const Dashboard = () => {
       const receiptHTML = `
         <html>
           <head>
-            <title>Recibo #${sale.sale_number}</title>
+            <title>Recibo #${sale.sale_number || sale.id}</title>
             <style>
               body { 
                 font-family: 'Courier New', monospace; 
@@ -201,7 +219,7 @@ const Dashboard = () => {
           <body>
             <div class="header">
               <h2 style="margin: 0">CAJA REGISTRADORA</h2>
-              <p style="margin: 5px 0">Recibo #${sale.sale_number}</p>
+              <p style="margin: 5px 0">Recibo #${sale.sale_number || sale.id}</p>
               <p style="margin: 5px 0">${new Date(sale.created_at).toLocaleString('es-CO')}</p>
             </div>
             
@@ -211,32 +229,31 @@ const Dashboard = () => {
               <div class="item">
                 <div class="item-detail">
                   <div>${item.product_name}</div>
-                  <div>${item.quantity} x $${item.unit_price.toFixed(2)}</div>
+                  <div>${item.quantity} unidades</div>
                   <div>
                     <span class="badge badge-${sale.product_state}">${sale.product_state === 'frito' ? 'FRITO' : 'CONGELADO'}</span>
                   </div>
                 </div>
-                <div>$${item.subtotal.toFixed(2)}</div>
               </div>
             `).join('')}
             
             <div class="separator"></div>
             
             <div class="item subtotal">
-              <div>Subtotal</div>
-              <div>$${subtotal.toFixed(2)}</div>
+              <div>Total productos:</div>
+              <div>${saleItems.reduce((sum, item) => sum + item.quantity, 0)} unidades</div>
             </div>
             
             ${sale.delivery_fee > 0 ? `
               <div class="item">
-                <div>Domicilio</div>
+                <div>Domicilio:</div>
                 <div>$${parseFloat(sale.delivery_fee).toFixed(2)}</div>
               </div>
             ` : ''}
             
             <div class="item total">
-              <div>TOTAL</div>
-              <div>$${totalWithDelivery.toFixed(2)}</div>
+              <div>TOTAL:</div>
+              <div>$${sale.total_amount.toFixed(2)}</div>
             </div>
             
             <div class="separator"></div>
@@ -251,6 +268,13 @@ const Dashboard = () => {
               <div>
                 ${sale.account_type === 'credito' ? 'Crédito' : 'Contado'}
                 ${sale.account_type === 'credito' ? '<span class="badge badge-credito">CRÉDITO</span>' : ''}
+              </div>
+            </div>
+            
+            <div class="item">
+              <div>Estado de pago:</div>
+              <div>
+                ${sale.payment_status === 'paid' ? '<span style="color: green;">PAGADO</span>' : '<span style="color: orange;">PENDIENTE</span>'}
               </div>
             </div>
             
@@ -287,8 +311,7 @@ const Dashboard = () => {
       receiptWindow.document.write(receiptHTML);
       receiptWindow.document.close();
       
-      // Mostrar mensaje de éxito
-      toast.success(`Recibo #${sale.sale_number} generado. Se abrirá en una nueva ventana.`);
+      toast.success(`Recibo #${sale.sale_number || sale.id} generado.`);
       
     } catch (error) {
       console.error('Error generando recibo:', error);
@@ -298,36 +321,126 @@ const Dashboard = () => {
 
   const loadSaleItems = async (saleId) => {
     try {
-      console.log('🔍 Buscando items para sale_id:', saleId);
-      
       const { data: items, error } = await supabase
         .from('sale_items')
         .select('*')
         .eq('sale_id', saleId);
 
-      if (error) {
-        console.error('❌ Error en consulta de items:', error);
-        throw error;
-      }
+      if (error) throw error;
       
-      console.log('✅ Items encontrados:', items);
       return items || [];
       
     } catch (error) {
-      console.error('❌ Error cargando items:', error);
+      console.error('Error cargando items:', error);
       toast.error('Error al cargar productos de la venta');
       return [];
     }
   };
 
   const showSaleDetails = async (sale) => {
-    console.log('🔄 Mostrando detalles de venta:', sale.id);
     setSelectedSale(sale);
-    
-    // Cargar los items de la venta
     const items = await loadSaleItems(sale.id);
-    console.log('📦 Items cargados para modal:', items);
     setSelectedSaleItems(items);
+  };
+
+  // Función para editar venta
+  const startEditSale = (sale) => {
+    setEditingSale(sale);
+    setEditForm({
+      customer_name: sale.customer_name || '',
+      phone: sale.phone || '',
+      address: sale.address || '',
+      total_amount: sale.total_amount,
+      payment_status: sale.payment_status || 'pending',
+      account_type: sale.account_type || 'contado',
+      delivery_fee: sale.delivery_fee || 0,
+      product_state: sale.product_state || 'congelado'
+    });
+  };
+
+  // Función para guardar cambios
+  const saveEditedSale = async () => {
+    if (!editingSale) return;
+    
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .update({
+          customer_name: editForm.customer_name.trim() || 'Cliente ocasional',
+          phone: editForm.phone || null,
+          address: editForm.address || null,
+          total_amount: parseFloat(editForm.total_amount),
+          payment_status: editForm.payment_status,
+          account_type: editForm.account_type,
+          delivery_fee: parseFloat(editForm.delivery_fee),
+          product_state: editForm.product_state,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', editingSale.id);
+      
+      if (error) throw error;
+      
+      toast.success('Venta actualizada correctamente');
+      setEditingSale(null);
+      loadDashboard();
+    } catch (error) {
+      console.error('Error actualizando venta:', error);
+      toast.error('Error al actualizar la venta');
+    }
+  };
+
+  // Función para eliminar venta
+  const deleteSale = async (saleId) => {
+    if (!confirm('¿Estás seguro de eliminar esta venta? Esta acción no se puede deshacer.')) {
+      return;
+    }
+
+    try {
+      // Primero eliminar los items de la venta
+      const { error: itemsError } = await supabase
+        .from('sale_items')
+        .delete()
+        .eq('sale_id', saleId);
+      
+      if (itemsError) throw itemsError;
+
+      // Luego eliminar la venta
+      const { error: saleError } = await supabase
+        .from('sales')
+        .delete()
+        .eq('id', saleId);
+      
+      if (saleError) throw saleError;
+      
+      toast.success('Venta eliminada correctamente');
+      loadDashboard();
+    } catch (error) {
+      console.error('Error eliminando venta:', error);
+      toast.error('Error al eliminar la venta');
+    }
+  };
+
+  // Función para cambiar estado de pago rápido
+  const togglePaymentStatus = async (saleId, currentStatus) => {
+    const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
+    
+    try {
+      const { error } = await supabase
+        .from('sales')
+        .update({ 
+          payment_status: newStatus,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', saleId);
+      
+      if (error) throw error;
+      
+      toast.success(`Estado cambiado a ${newStatus === 'paid' ? 'Pagado' : 'Pendiente'}`);
+      loadDashboard();
+    } catch (error) {
+      console.error('Error cambiando estado:', error);
+      toast.error('Error al cambiar estado');
+    }
   };
 
   const applyFiltersAndSearch = () => {
@@ -356,8 +469,8 @@ const Dashboard = () => {
       result = result.filter(sale => sale.product_state === filters.productState);
     }
     
-    if (filters.status !== 'all') {
-      result = result.filter(sale => sale.status === filters.status);
+    if (filters.paymentStatus !== 'all') {
+      result = result.filter(sale => sale.payment_status === filters.paymentStatus);
     }
 
     // Aplicar ordenamiento
@@ -365,7 +478,6 @@ const Dashboard = () => {
       let aValue = a[sortField];
       let bValue = b[sortField];
       
-      // Manejar fechas
       if (sortField.includes('date') || sortField === 'created_at') {
         aValue = new Date(aValue);
         bValue = new Date(bValue);
@@ -457,6 +569,34 @@ const Dashboard = () => {
     );
   };
 
+  const PaymentStatusBadge = ({ status, saleId, onToggle }) => {
+    const isPaid = status === 'paid';
+    
+    return (
+      <button
+        onClick={() => onToggle && onToggle(saleId, status)}
+        className={`px-2 py-1 rounded-full text-xs font-medium flex items-center gap-1 ${
+          isPaid 
+            ? 'bg-green-100 text-green-800 hover:bg-green-200' 
+            : 'bg-yellow-100 text-yellow-800 hover:bg-yellow-200'
+        } transition-colors cursor-pointer`}
+        title="Click para cambiar estado"
+      >
+        {isPaid ? (
+          <>
+            <CheckCircle className="h-3 w-3" />
+            Pagado
+          </>
+        ) : (
+          <>
+            <Clock className="h-3 w-3" />
+            Pendiente
+          </>
+        )}
+      </button>
+    );
+  };
+
   // Paginación
   const indexOfLastItem = currentPage * itemsPerPage;
   const indexOfFirstItem = indexOfLastItem - itemsPerPage;
@@ -483,7 +623,7 @@ const Dashboard = () => {
       {/* Estadísticas */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         <StatCard 
-          title="Ingresos hoy" 
+          title="Ingresos hoy (pagados)" 
           value={formatCurrency(stats.todayRevenue)} 
           icon={DollarSign}
           trend="daily"
@@ -531,7 +671,7 @@ const Dashboard = () => {
                   accountType: 'all',
                   paymentMethod: 'all',
                   productState: 'all',
-                  status: 'all'
+                  paymentStatus: 'all'
                 });
                 setSearchTerm('');
               }}
@@ -584,16 +724,15 @@ const Dashboard = () => {
           </div>
           
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Estado venta</label>
+            <label className="block text-sm font-medium text-gray-700 mb-1">Estado de pago</label>
             <select
-              value={filters.status}
-              onChange={(e) => setFilters({...filters, status: e.target.value})}
+              value={filters.paymentStatus}
+              onChange={(e) => setFilters({...filters, paymentStatus: e.target.value})}
               className="w-full border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-500"
             >
               <option value="all">Todos</option>
-              <option value="completed">Completada</option>
+              <option value="paid">Pagado</option>
               <option value="pending">Pendiente</option>
-              <option value="cancelled">Cancelada</option>
             </select>
           </div>
         </div>
@@ -622,11 +761,14 @@ const Dashboard = () => {
                     )}
                   </div>
                 </th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider cursor-pointer" onClick={() => handleSort('phone')}>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Teléfono
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Tipo Cuenta
+                </th>
+                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                  Estado Pago
                 </th>
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Estado
@@ -648,7 +790,6 @@ const Dashboard = () => {
                     )}
                   </div>
                 </th>
-                {/* NUEVA COLUMNA: Recibo */}
                 <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
                   Recibo
                 </th>
@@ -660,7 +801,7 @@ const Dashboard = () => {
             <tbody className="bg-white divide-y divide-gray-200">
               {currentItems.length === 0 ? (
                 <tr>
-                  <td colSpan="9" className="px-6 py-8 text-center text-gray-500">
+                  <td colSpan="10" className="px-6 py-8 text-center text-gray-500">
                     No se encontraron ventas
                   </td>
                 </tr>
@@ -669,7 +810,7 @@ const Dashboard = () => {
                   <tr key={sale.id} className="hover:bg-gray-50">
                     <td className="px-6 py-4 whitespace-nowrap">
                       <div className="text-sm font-medium text-gray-900">
-                        #{sale.sale_number}
+                        #{sale.sale_number || `V-${sale.id.substring(0, 8)}`}
                       </div>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
@@ -695,6 +836,13 @@ const Dashboard = () => {
                       <AccountTypeBadge type={sale.account_type} />
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
+                      <PaymentStatusBadge 
+                        status={sale.payment_status || 'pending'} 
+                        saleId={sale.id}
+                        onToggle={togglePaymentStatus}
+                      />
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
                       <div className="space-y-1">
                         <PaymentMethodBadge method={sale.payment_method} />
                         <ProductStateBadge state={sale.product_state} />
@@ -715,7 +863,6 @@ const Dashboard = () => {
                         {formatDate(sale.created_at)}
                       </div>
                     </td>
-                    {/* NUEVA CELDA: Botón para imprimir recibo */}
                     <td className="px-6 py-4 whitespace-nowrap">
                       <button
                         onClick={() => printSaleReceipt(sale)}
@@ -727,13 +874,29 @@ const Dashboard = () => {
                       </button>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap">
-                      <button
-                        onClick={() => showSaleDetails(sale)}
-                        className="text-blue-600 hover:text-blue-900 flex items-center gap-1 px-3 py-1 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
-                      >
-                        <Eye className="h-4 w-4" />
-                        <span className="text-sm font-medium">Detalles</span>
-                      </button>
+                      <div className="flex gap-2">
+                        <button
+                          onClick={() => showSaleDetails(sale)}
+                          className="text-blue-600 hover:text-blue-900 px-2 py-1 border border-blue-200 rounded hover:bg-blue-50 transition-colors"
+                          title="Ver detalles"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => startEditSale(sale)}
+                          className="text-green-600 hover:text-green-900 px-2 py-1 border border-green-200 rounded hover:bg-green-50 transition-colors"
+                          title="Editar venta"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </button>
+                        <button
+                          onClick={() => deleteSale(sale.id)}
+                          className="text-red-600 hover:text-red-900 px-2 py-1 border border-red-200 rounded hover:bg-red-50 transition-colors"
+                          title="Eliminar venta"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -790,7 +953,7 @@ const Dashboard = () => {
             <div className="p-6">
               <div className="flex justify-between items-center mb-6">
                 <h3 className="text-xl font-bold text-gray-900">
-                  Detalles de Venta #{selectedSale.sale_number}
+                  Detalles de Venta #{selectedSale.sale_number || selectedSale.id}
                 </h3>
                 <button
                   onClick={() => {
@@ -843,26 +1006,20 @@ const Dashboard = () => {
                       <ProductStateBadge state={selectedSale.product_state} />
                     </div>
                     <div className="flex justify-between">
+                      <span className="text-gray-600">Estado de pago:</span>
+                      <PaymentStatusBadge 
+                        status={selectedSale.payment_status || 'pending'} 
+                        saleId={selectedSale.id}
+                        onToggle={togglePaymentStatus}
+                      />
+                    </div>
+                    <div className="flex justify-between">
                       <span className="text-gray-600">Domicilio:</span>
                       <span className="font-medium">{formatCurrency(selectedSale.delivery_fee)}</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-gray-600">Fecha:</span>
                       <span className="font-medium">{formatDate(selectedSale.created_at)}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-gray-600">Estado:</span>
-                      <span className={`font-medium ${
-                        selectedSale.status === 'completed' ? 'text-green-600' :
-                        selectedSale.status === 'pending' ? 'text-yellow-600' :
-                        selectedSale.status === 'cancelled' ? 'text-red-600' :
-                        'text-gray-600'
-                      }`}>
-                        {selectedSale.status === 'completed' ? 'Completada' :
-                         selectedSale.status === 'pending' ? 'Pendiente' :
-                         selectedSale.status === 'cancelled' ? 'Cancelada' :
-                         selectedSale.status || 'No especificado'}
-                      </span>
                     </div>
                   </div>
                 </div>
@@ -878,35 +1035,35 @@ const Dashboard = () => {
                         <tr>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Producto</th>
                           <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Cantidad</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Precio Unitario</th>
-                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Subtotal</th>
+                          <th className="px-4 py-2 text-left text-xs font-medium text-gray-500 uppercase">Estado</th>
                         </tr>
                       </thead>
                       <tbody className="divide-y divide-gray-200">
                         {selectedSaleItems.map((item, index) => (
                           <tr key={index}>
                             <td className="px-4 py-3">{item.product_name}</td>
-                            <td className="px-4 py-3">{item.quantity}</td>
-                            <td className="px-4 py-3">{formatCurrency(item.unit_price)}</td>
-                            <td className="px-4 py-3 font-medium">{formatCurrency(item.subtotal)}</td>
+                            <td className="px-4 py-3">{item.quantity} unidades</td>
+                            <td className="px-4 py-3">
+                              <ProductStateBadge state={selectedSale.product_state} />
+                            </td>
                           </tr>
                         ))}
                       </tbody>
                       <tfoot className="bg-gray-50">
                         <tr>
-                          <td colSpan="3" className="px-4 py-3 text-right font-semibold">Subtotal:</td>
+                          <td colSpan="2" className="px-4 py-3 text-right font-semibold">Total productos:</td>
                           <td className="px-4 py-3 font-bold">
-                            {formatCurrency(selectedSale.total_amount - (selectedSale.delivery_fee || 0))}
+                            {selectedSaleItems.reduce((sum, item) => sum + item.quantity, 0)} unidades
                           </td>
                         </tr>
                         <tr>
-                          <td colSpan="3" className="px-4 py-3 text-right font-semibold">Domicilio:</td>
+                          <td colSpan="2" className="px-4 py-3 text-right font-semibold">Domicilio:</td>
                           <td className="px-4 py-3 font-bold">
                             {formatCurrency(selectedSale.delivery_fee || 0)}
                           </td>
                         </tr>
                         <tr>
-                          <td colSpan="3" className="px-4 py-3 text-right font-semibold text-lg">TOTAL:</td>
+                          <td colSpan="2" className="px-4 py-3 text-right font-semibold text-lg">TOTAL:</td>
                           <td className="px-4 py-3 font-bold text-lg text-blue-600">
                             {formatCurrency(selectedSale.total_amount)}
                           </td>
@@ -927,13 +1084,143 @@ const Dashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Modal para editar venta */}
+      {editingSale && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+          <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+            <div className="p-6">
+              <div className="flex justify-between items-center mb-6">
+                <h3 className="text-lg font-bold">Editar Venta #{editingSale.sale_number}</h3>
+                <button
+                  onClick={() => setEditingSale(null)}
+                  className="text-gray-400 hover:text-gray-600"
+                >
+                  <X className="h-6 w-6" />
+                </button>
+              </div>
+              
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Cliente</label>
+                  <input
+                    type="text"
+                    value={editForm.customer_name}
+                    onChange={(e) => setEditForm({...editForm, customer_name: e.target.value})}
+                    className="input-field w-full"
+                    placeholder="Nombre del cliente"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Teléfono</label>
+                  <input
+                    type="text"
+                    value={editForm.phone}
+                    onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
+                    className="input-field w-full"
+                    placeholder="Teléfono"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Dirección</label>
+                  <textarea
+                    value={editForm.address}
+                    onChange={(e) => setEditForm({...editForm, address: e.target.value})}
+                    className="input-field w-full"
+                    placeholder="Dirección"
+                    rows="2"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Total</label>
+                  <input
+                    type="number"
+                    value={editForm.total_amount}
+                    onChange={(e) => setEditForm({...editForm, total_amount: e.target.value})}
+                    className="input-field w-full"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Domicilio</label>
+                  <input
+                    type="number"
+                    value={editForm.delivery_fee}
+                    onChange={(e) => setEditForm({...editForm, delivery_fee: e.target.value})}
+                    className="input-field w-full"
+                    step="0.01"
+                    min="0"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Estado de pago</label>
+                  <select
+                    value={editForm.payment_status}
+                    onChange={(e) => setEditForm({...editForm, payment_status: e.target.value})}
+                    className="input-field w-full"
+                  >
+                    <option value="pending">Pendiente</option>
+                    <option value="paid">Pagado</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Tipo de cuenta</label>
+                  <select
+                    value={editForm.account_type}
+                    onChange={(e) => setEditForm({...editForm, account_type: e.target.value})}
+                    className="input-field w-full"
+                  >
+                    <option value="contado">Contado</option>
+                    <option value="credito">Crédito</option>
+                  </select>
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium mb-1">Estado del producto</label>
+                  <select
+                    value={editForm.product_state}
+                    onChange={(e) => setEditForm({...editForm, product_state: e.target.value})}
+                    className="input-field w-full"
+                  >
+                    <option value="congelado">Congelado</option>
+                    <option value="frito">Frito</option>
+                  </select>
+                </div>
+                
+                <div className="flex gap-2 pt-4">
+                  <button
+                    onClick={() => setEditingSale(null)}
+                    className="flex-1 btn-secondary"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={saveEditedSale}
+                    className="flex-1 btn-primary flex items-center justify-center gap-2"
+                  >
+                    <Save className="h-4 w-4" />
+                    Guardar
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
 const StatCard = ({ title, value, icon: Icon, subtitle, alert, trend }) => {
   if (!Icon) {
-    Icon = DollarSign; // Icono por defecto
+    Icon = DollarSign;
   }
   
   return (
