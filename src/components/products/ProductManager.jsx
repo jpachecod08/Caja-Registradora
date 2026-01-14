@@ -13,29 +13,28 @@ import {
   MoreVertical,
   Download,
   X,
-  Save
+  Save,
+  TrendingDown,
+  CheckCircle,
+  BarChart3
 } from 'lucide-react';
 
-const ProductManager = ({ viewMode = 'grid' }) => {
+const ProductManager = () => {
   const [products, setProducts] = useState([]);
   const [filteredProducts, setFilteredProducts] = useState([]);
   const [loading, setLoading] = useState(true);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedCategory, setSelectedCategory] = useState('all');
   const [categories, setCategories] = useState([]);
-  const [selectedProduct, setSelectedProduct] = useState(null);
   const [showActionsMenu, setShowActionsMenu] = useState(null);
   const [editingProduct, setEditingProduct] = useState(null);
   const [editForm, setEditForm] = useState({
     name: '',
     description: '',
-    price: 0,
-    cost: 0,
     stock: 0,
-    min_stock: 0,
+    min_stock: 5,
     category: '',
-    sku: '',
-    barcode: ''
+    is_active: true
   });
 
   useEffect(() => {
@@ -59,7 +58,7 @@ const ProductManager = ({ viewMode = 'grid' }) => {
       setProducts(data || []);
       extractCategories(data || []);
     } catch (error) {
-      console.error('Error loading products:', error);
+      console.error('Error cargando productos:', error);
       toast.error('Error al cargar productos');
     } finally {
       setLoading(false);
@@ -67,7 +66,10 @@ const ProductManager = ({ viewMode = 'grid' }) => {
   };
 
   const extractCategories = (products) => {
-    const uniqueCategories = [...new Set(products.map(p => p.category).filter(Boolean))];
+    const uniqueCategories = [...new Set(products
+      .map(p => p.category)
+      .filter(Boolean)
+      .sort())];
     setCategories(uniqueCategories);
   };
 
@@ -78,8 +80,7 @@ const ProductManager = ({ viewMode = 'grid' }) => {
       filtered = filtered.filter(product =>
         product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
         product.description?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.sku?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        product.barcode?.includes(searchTerm)
+        product.category?.toLowerCase().includes(searchTerm.toLowerCase())
       );
     }
     
@@ -95,23 +96,19 @@ const ProductManager = ({ viewMode = 'grid' }) => {
     setEditForm({
       name: product.name || '',
       description: product.description || '',
-      price: product.price || 0,
-      cost: product.cost || 0,
       stock: product.stock || 0,
-      min_stock: product.min_stock || 0,
+      min_stock: product.min_stock || 5,
       category: product.category || '',
-      sku: product.sku || '',
-      barcode: product.barcode || ''
+      is_active: product.is_active
     });
   };
 
   const handleEditFormChange = (e) => {
-    const { name, value } = e.target;
+    const { name, value, type, checked } = e.target;
     setEditForm(prev => ({
       ...prev,
-      [name]: name === 'price' || name === 'cost' || name === 'stock' || name === 'min_stock' 
-        ? parseFloat(value) || 0 
-        : value
+      [name]: type === 'checkbox' ? checked : 
+              (type === 'number' ? (value === '' ? '' : Number(value)) : value)
     }));
   };
 
@@ -123,16 +120,21 @@ const ProductManager = ({ viewMode = 'grid' }) => {
     try {
       const { error } = await supabase
         .from('products')
-        .update(editForm)
+        .update({
+          ...editForm,
+          // Mantener precio y costo en 0
+          price: 0,
+          cost: 0
+        })
         .eq('id', editingProduct);
       
       if (error) throw error;
       
-      toast.success('Producto actualizado exitosamente');
+      toast.success('✅ Producto actualizado exitosamente');
       setEditingProduct(null);
       fetchProducts();
     } catch (error) {
-      console.error('Error updating product:', error);
+      console.error('Error actualizando producto:', error);
       toast.error('Error al actualizar producto');
     }
   };
@@ -142,13 +144,10 @@ const ProductManager = ({ viewMode = 'grid' }) => {
     setEditForm({
       name: '',
       description: '',
-      price: 0,
-      cost: 0,
       stock: 0,
-      min_stock: 0,
+      min_stock: 5,
       category: '',
-      sku: '',
-      barcode: ''
+      is_active: true
     });
   };
 
@@ -164,13 +163,13 @@ const ProductManager = ({ viewMode = 'grid' }) => {
       toast.success(`Producto ${!currentStatus ? 'activado' : 'desactivado'}`);
       fetchProducts();
     } catch (error) {
-      console.error('Error changing status:', error);
+      console.error('Error cambiando estado:', error);
       toast.error('Error al cambiar estado');
     }
   };
 
   const deleteProduct = async (productId) => {
-    if (!window.confirm('¿Estás seguro de eliminar este producto?')) return;
+    if (!window.confirm('¿Estás seguro de eliminar este producto? Esta acción no se puede deshacer.')) return;
     
     try {
       const { error } = await supabase
@@ -180,15 +179,20 @@ const ProductManager = ({ viewMode = 'grid' }) => {
       
       if (error) throw error;
       
-      toast.success('Producto eliminado');
+      toast.success('✅ Producto eliminado');
       fetchProducts();
     } catch (error) {
-      console.error('Error deleting product:', error);
+      console.error('Error eliminando producto:', error);
       toast.error('Error al eliminar producto');
     }
   };
 
   const updateStock = async (productId, newStock) => {
+    if (newStock < 0) {
+      toast.error('El stock no puede ser negativo');
+      return;
+    }
+    
     try {
       const { error } = await supabase
         .from('products')
@@ -197,23 +201,37 @@ const ProductManager = ({ viewMode = 'grid' }) => {
       
       if (error) throw error;
       
-      toast.success('Stock actualizado');
+      toast.success('✅ Stock actualizado');
       fetchProducts();
     } catch (error) {
-      console.error('Error updating stock:', error);
+      console.error('Error actualizando stock:', error);
       toast.error('Error al actualizar stock');
     }
   };
 
   const exportProducts = () => {
-    // Implementar exportación a Excel
-    toast.success('Exportación en desarrollo');
+    toast.success('📊 Exportación en desarrollo...');
   };
 
   const getStockStatus = (product) => {
+    if (!product.is_active) return 'inactive';
     if (product.stock <= 0) return 'out-of-stock';
     if (product.stock <= product.min_stock) return 'low-stock';
     return 'in-stock';
+  };
+
+  const getStockColor = (stock, minStock) => {
+    if (stock === 0) return 'bg-red-100 text-red-800';
+    if (stock <= minStock) return 'bg-yellow-100 text-yellow-800';
+    if (stock <= minStock * 2) return 'bg-orange-100 text-orange-800';
+    return 'bg-green-100 text-green-800';
+  };
+
+  const getStockStatusText = (stock, minStock) => {
+    if (stock === 0) return 'AGOTADO';
+    if (stock <= minStock) return 'BAJO STOCK';
+    if (stock <= minStock * 2) return 'MEDIO STOCK';
+    return 'DISPONIBLE';
   };
 
   if (loading) {
@@ -227,12 +245,21 @@ const ProductManager = ({ viewMode = 'grid' }) => {
     );
   }
 
+  // Estadísticas del inventario
+  const stats = {
+    totalProducts: products.length,
+    activeProducts: products.filter(p => p.is_active).length,
+    outOfStock: products.filter(p => p.is_active && p.stock === 0).length,
+    lowStock: products.filter(p => p.is_active && p.stock > 0 && p.stock <= (p.min_stock || 5)).length,
+    inStock: products.filter(p => p.is_active && p.stock > (p.min_stock || 5)).length
+  };
+
   return (
     <div className="space-y-6">
       {/* Modal de edición */}
       {editingProduct && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
-          <div className="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white rounded-lg shadow-xl w-full max-w-md max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between p-6 border-b">
               <h2 className="text-xl font-semibold text-gray-900">Editar Producto</h2>
               <button
@@ -244,9 +271,9 @@ const ProductManager = ({ viewMode = 'grid' }) => {
             </div>
             
             <form onSubmit={handleEditSubmit} className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <div className="space-y-4">
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Nombre *
                   </label>
                   <input
@@ -255,12 +282,25 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                     value={editForm.name}
                     onChange={handleEditFormChange}
                     required
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Descripción
+                  </label>
+                  <textarea
+                    name="description"
+                    value={editForm.description}
+                    onChange={handleEditFormChange}
+                    rows="2"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
                     Categoría
                   </label>
                   <input
@@ -269,7 +309,8 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                     value={editForm.category}
                     onChange={handleEditFormChange}
                     list="categories-list"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Ej: Congelados, Fritos..."
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                   <datalist id="categories-list">
                     {categories.map(category => (
@@ -279,39 +320,8 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Precio *
-                  </label>
-                  <input
-                    type="number"
-                    name="price"
-                    value={editForm.price}
-                    onChange={handleEditFormChange}
-                    required
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Costo
-                  </label>
-                  <input
-                    type="number"
-                    name="cost"
-                    value={editForm.cost}
-                    onChange={handleEditFormChange}
-                    min="0"
-                    step="0.01"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock *
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Stock actual *
                   </label>
                   <input
                     type="number"
@@ -320,61 +330,39 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                     onChange={handleEditFormChange}
                     required
                     min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    step="1"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Stock Mínimo
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Stock mínimo de alerta *
                   </label>
                   <input
                     type="number"
                     name="min_stock"
                     value={editForm.min_stock}
                     onChange={handleEditFormChange}
+                    required
                     min="0"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    step="1"
+                    className="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
                   />
                 </div>
                 
-                <div className="md:col-span-2">
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Descripción
-                  </label>
-                  <textarea
-                    name="description"
-                    value={editForm.description}
-                    onChange={handleEditFormChange}
-                    rows="3"
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    SKU
-                  </label>
+                <div className="flex items-center p-3 bg-gray-50 rounded-lg">
                   <input
-                    type="text"
-                    name="sku"
-                    value={editForm.sku}
+                    type="checkbox"
+                    id="edit_is_active"
+                    name="is_active"
+                    checked={editForm.is_active}
                     onChange={handleEditFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    className="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
                   />
-                </div>
-                
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 mb-2">
-                    Código de Barras
+                  <label htmlFor="edit_is_active" className="ml-2 text-sm text-gray-700">
+                    Producto activo
                   </label>
-                  <input
-                    type="text"
-                    name="barcode"
-                    value={editForm.barcode}
-                    onChange={handleEditFormChange}
-                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  />
                 </div>
               </div>
               
@@ -382,13 +370,13 @@ const ProductManager = ({ viewMode = 'grid' }) => {
                 <button
                   type="button"
                   onClick={cancelEdit}
-                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
+                  className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
-                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center"
+                  className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors flex items-center"
                 >
                   <Save className="h-4 w-4 mr-2" />
                   Guardar Cambios
@@ -399,6 +387,57 @@ const ProductManager = ({ viewMode = 'grid' }) => {
         </div>
       )}
 
+      {/* Resumen de inventario */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Productos totales</p>
+              <p className="text-2xl font-bold text-gray-900">{stats.totalProducts}</p>
+            </div>
+            <div className="p-2 bg-blue-100 rounded-lg">
+              <Package className="h-6 w-6 text-blue-600" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">En stock</p>
+              <p className="text-2xl font-bold text-green-600">{stats.inStock}</p>
+            </div>
+            <div className="p-2 bg-green-100 rounded-lg">
+              <CheckCircle className="h-6 w-6 text-green-600" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Bajo stock</p>
+              <p className="text-2xl font-bold text-yellow-600">{stats.lowStock}</p>
+            </div>
+            <div className="p-2 bg-yellow-100 rounded-lg">
+              <AlertTriangle className="h-6 w-6 text-yellow-600" />
+            </div>
+          </div>
+        </div>
+        
+        <div className="bg-white p-4 rounded-xl border border-gray-200 shadow-sm">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm text-gray-500">Agotados</p>
+              <p className="text-2xl font-bold text-red-600">{stats.outOfStock}</p>
+            </div>
+            <div className="p-2 bg-red-100 rounded-lg">
+              <TrendingDown className="h-6 w-6 text-red-600" />
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Filtros */}
       <div className="card">
         <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
@@ -406,10 +445,10 @@ const ProductManager = ({ viewMode = 'grid' }) => {
             <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 h-5 w-5" />
             <input
               type="text"
-              placeholder="Buscar productos..."
+              placeholder="Buscar productos por nombre o categoría..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+              className="w-full pl-10 pr-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
             />
           </div>
           
@@ -419,7 +458,7 @@ const ProductManager = ({ viewMode = 'grid' }) => {
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="border border-gray-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                className="border border-gray-300 rounded-lg px-3 py-3 focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-all"
               >
                 <option value="all">Todas las categorías</option>
                 {categories.map(category => (
@@ -430,7 +469,7 @@ const ProductManager = ({ viewMode = 'grid' }) => {
             
             <button
               onClick={exportProducts}
-              className="btn-secondary flex items-center"
+              className="px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors flex items-center"
             >
               <Download className="h-4 w-4 mr-2" />
               Exportar
@@ -439,222 +478,202 @@ const ProductManager = ({ viewMode = 'grid' }) => {
         </div>
       </div>
 
-      {/* Vista de productos */}
-      {viewMode === 'grid' ? (
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {filteredProducts.map((product) => {
-            const stockStatus = getStockStatus(product);
-            
-            return (
-              <div key={product.id} className="card group hover:shadow-lg transition-shadow">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <h3 className="font-semibold text-gray-900 text-lg">{product.name}</h3>
-                    {product.description && (
-                      <p className="text-gray-500 text-sm mt-1 line-clamp-2">
-                        {product.description}
-                      </p>
-                    )}
+      {/* Vista de productos en grid */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {filteredProducts.map((product) => {
+          const stockStatus = getStockStatus(product);
+          const stockColor = getStockColor(product.stock, product.min_stock || 5);
+          const stockStatusText = getStockStatusText(product.stock, product.min_stock || 5);
+          const isOutOfStock = product.stock === 0;
+          const isLowStock = product.stock > 0 && product.stock <= (product.min_stock || 5);
+          
+          return (
+            <div key={product.id} className={`card group hover:shadow-lg transition-all duration-300 ${
+              !product.is_active ? 'opacity-60' : ''
+            }`}>
+              <div className="flex justify-between items-start mb-4">
+                <div className="flex-1">
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <h3 className="font-semibold text-gray-900 text-lg">{product.name}</h3>
+                      {product.description && (
+                        <p className="text-gray-500 text-sm mt-1 line-clamp-2">
+                          {product.description}
+                        </p>
+                      )}
+                    </div>
+                    
+                    {/* Badge de estado del stock */}
+                    <div className={`px-2 py-1 rounded-full text-xs font-bold ${stockColor} ml-2`}>
+                      {stockStatusText}
+                    </div>
                   </div>
                   
-                  <div className="relative">
-                    <button
-                      onClick={() => setShowActionsMenu(showActionsMenu === product.id ? null : product.id)}
-                      className="p-1 hover:bg-gray-100 rounded"
-                    >
-                      <MoreVertical className="h-4 w-4 text-gray-500" />
-                    </button>
-                    
-                    {showActionsMenu === product.id && (
-                      <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
-                        <button
-                          onClick={() => handleEditClick(product)}
-                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
-                        >
-                          Editar
-                        </button>
-                        <button
-                          onClick={() => toggleProductStatus(product.id, product.is_active)}
-                          className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100"
-                        >
-                          {product.is_active ? 'Desactivar' : 'Activar'}
-                        </button>
-                        <button
-                          onClick={() => deleteProduct(product.id)}
-                          className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50"
-                        >
-                          Eliminar
-                        </button>
-                      </div>
-                    )}
-                  </div>
+                  {product.category && (
+                    <span className="inline-block mt-2 text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                      {product.category}
+                    </span>
+                  )}
                 </div>
                 
-                <div className="space-y-4">
-                  <div className="flex justify-between items-center">
-                    <div>
-                      <div className="text-2xl font-bold text-blue-600">
-                        ${product.price.toFixed(2)}
-                      </div>
-                      {product.cost && (
-                        <div className="text-sm text-gray-500">
-                          Costo: ${product.cost.toFixed(2)}
-                        </div>
-                      )}
-                    </div>
-                    
-                    <div className="text-right">
-                      <div className={`font-medium px-3 py-1 rounded-full text-sm ${
-                        stockStatus === 'out-of-stock' ? 'bg-red-100 text-red-800' :
-                        stockStatus === 'low-stock' ? 'bg-yellow-100 text-yellow-800' :
-                        'bg-green-100 text-green-800'
-                      }`}>
-                        Stock: {product.stock}
-                      </div>
-                      {stockStatus === 'low-stock' && (
-                        <div className="text-xs text-yellow-600 mt-1 flex items-center">
-                          <AlertTriangle className="h-3 w-3 mr-1" />
-                          Mínimo: {product.min_stock}
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                {/* Menú de acciones */}
+                <div className="relative">
+                  <button
+                    onClick={() => setShowActionsMenu(showActionsMenu === product.id ? null : product.id)}
+                    className="p-1 hover:bg-gray-100 rounded"
+                  >
+                    <MoreVertical className="h-4 w-4 text-gray-500" />
+                  </button>
                   
-                  <div className="flex items-center justify-between text-sm text-gray-500">
-                    <span>{product.category || 'Sin categoría'}</span>
-                    <span className={`flex items-center ${product.is_active ? 'text-green-600' : 'text-gray-400'}`}>
-                      {product.is_active ? (
-                        <>
-                          <Eye className="h-3 w-3 mr-1" />
-                          Activo
-                        </>
-                      ) : (
-                        <>
-                          <EyeOff className="h-3 w-3 mr-1" />
-                          Inactivo
-                        </>
-                      )}
-                    </span>
-                  </div>
-                  
-                  {product.sku && (
-                    <div className="text-xs text-gray-400">
-                      SKU: {product.sku}
+                  {showActionsMenu === product.id && (
+                    <div className="absolute right-0 mt-1 w-48 bg-white rounded-lg shadow-lg border border-gray-200 z-10">
+                      <button
+                        onClick={() => {
+                          handleEditClick(product);
+                          setShowActionsMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        <Edit className="h-3 w-3" />
+                        Editar producto
+                      </button>
+                      <button
+                        onClick={() => {
+                          toggleProductStatus(product.id, product.is_active);
+                          setShowActionsMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm hover:bg-gray-100 flex items-center gap-2"
+                      >
+                        {product.is_active ? (
+                          <>
+                            <EyeOff className="h-3 w-3" />
+                            Desactivar
+                          </>
+                        ) : (
+                          <>
+                            <Eye className="h-3 w-3" />
+                            Activar
+                          </>
+                        )}
+                      </button>
+                      <button
+                        onClick={() => {
+                          deleteProduct(product.id);
+                          setShowActionsMenu(null);
+                        }}
+                        className="w-full text-left px-4 py-2 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                        Eliminar
+                      </button>
                     </div>
                   )}
                 </div>
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <div className="card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full">
-              <thead>
-                <tr className="border-b border-gray-200">
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Producto</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Precio</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Stock</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Categoría</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Estado</th>
-                  <th className="text-left py-3 px-4 font-medium text-gray-700">Acciones</th>
-                </tr>
-              </thead>
-              <tbody>
-                {filteredProducts.map((product) => {
-                  const stockStatus = getStockStatus(product);
+              
+              <div className="space-y-4">
+                {/* Información de stock */}
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center space-x-2">
+                    <div className="text-3xl font-bold text-gray-900">
+                      {product.stock}
+                    </div>
+                    <div className="text-sm text-gray-500">
+                      unidades
+                    </div>
+                  </div>
                   
-                  return (
-                    <tr key={product.id} className="border-b border-gray-100 hover:bg-gray-50">
-                      <td className="py-4 px-4">
-                        <div>
-                          <div className="font-medium text-gray-900">{product.name}</div>
-                          <div className="text-sm text-gray-500">{product.description}</div>
-                        </div>
-                      </td>
-                      
-                      <td className="py-4 px-4">
-                        <div className="font-bold text-gray-900">
-                          ${product.price.toFixed(2)}
-                        </div>
-                      </td>
-                      
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-3">
-                          <span className={`font-medium px-3 py-1 rounded-full text-sm ${
-                            stockStatus === 'out-of-stock' ? 'bg-red-100 text-red-800' :
-                            stockStatus === 'low-stock' ? 'bg-yellow-100 text-yellow-800' :
-                            'bg-green-100 text-green-800'
-                          }`}>
-                            {product.stock}
-                          </span>
-                          
-                          {stockStatus === 'low-stock' && product.stock > 0 && (
-                            <button
-                              onClick={() => updateStock(product.id, product.stock + 10)}
-                              className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200"
-                            >
-                              +10
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                      
-                      <td className="py-4 px-4">
-                        <span className="inline-block bg-gray-100 text-gray-800 px-3 py-1 rounded-full text-sm">
-                          {product.category || 'General'}
-                        </span>
-                      </td>
-                      
-                      <td className="py-4 px-4">
-                        <button
-                          onClick={() => toggleProductStatus(product.id, product.is_active)}
-                          className={`flex items-center space-x-2 px-3 py-1 rounded-full text-sm ${
-                            product.is_active
-                              ? 'bg-green-100 text-green-800'
-                              : 'bg-gray-100 text-gray-800'
+                  {/* Indicador visual de nivel de stock */}
+                  {product.is_active && product.stock > 0 && (
+                    <div className="w-24">
+                      <div className="h-2 bg-gray-200 rounded-full overflow-hidden">
+                        <div 
+                          className={`h-full ${
+                            isLowStock ? 'bg-yellow-500' : 'bg-green-500'
                           }`}
-                        >
-                          {product.is_active ? (
-                            <>
-                              <Eye className="h-3 w-3" />
-                              <span>Activo</span>
-                            </>
-                          ) : (
-                            <>
-                              <EyeOff className="h-3 w-3" />
-                              <span>Inactivo</span>
-                            </>
-                          )}
-                        </button>
-                      </td>
-                      
-                      <td className="py-4 px-4">
-                        <div className="flex items-center space-x-2">
-                          <button
-                            onClick={() => handleEditClick(product)}
-                            className="p-1 text-blue-600 hover:text-blue-800"
-                          >
-                            <Edit className="h-4 w-4" />
-                          </button>
-                          
-                          <button
-                            onClick={() => deleteProduct(product.id)}
-                            className="p-1 text-red-600 hover:text-red-800"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </button>
+                          style={{ 
+                            width: `${Math.min((product.stock / ((product.min_stock || 5) * 3)) * 100, 100)}%` 
+                          }}
+                        ></div>
+                      </div>
+                      <div className="text-xs text-gray-500 text-right mt-1">
+                        Mín: {product.min_stock || 5}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botones de acción rápida de stock */}
+                {product.is_active && (
+                  <div className="flex items-center justify-between pt-2 border-t border-gray-100">
+                    <div className="flex items-center space-x-2">
+                      {isLowStock && !isOutOfStock && (
+                        <div className="flex items-center text-xs text-yellow-600">
+                          <AlertTriangle className="h-3 w-3 mr-1" />
+                          Reabastecer
                         </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        </div>
-      )}
+                      )}
+                      {isOutOfStock && (
+                        <div className="flex items-center text-xs text-red-600">
+                          <span className="h-2 w-2 bg-red-500 rounded-full mr-1"></span>
+                          Sin stock
+                        </div>
+                      )}
+                      {!isLowStock && !isOutOfStock && (
+                        <div className="flex items-center text-xs text-green-600">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Disponible
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="flex space-x-2">
+                      <button
+                        onClick={() => updateStock(product.id, product.stock + 5)}
+                        className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded hover:bg-green-200 transition-colors"
+                        title="Añadir 5 unidades"
+                      >
+                        +5
+                      </button>
+                      <button
+                        onClick={() => {
+                          const newStock = Math.max(0, product.stock - 1);
+                          updateStock(product.id, newStock);
+                        }}
+                        className="text-xs bg-blue-100 text-blue-700 px-2 py-1 rounded hover:bg-blue-200 transition-colors"
+                        title="Reducir 1 unidad"
+                        disabled={isOutOfStock}
+                      >
+                        -1
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Estado activo/inactivo */}
+                <div className={`flex items-center justify-between text-sm ${product.is_active ? 'text-green-600' : 'text-gray-400'}`}>
+                  <span className="flex items-center">
+                    {product.is_active ? (
+                      <>
+                        <Eye className="h-3 w-3 mr-1" />
+                        Activo
+                      </>
+                    ) : (
+                      <>
+                        <EyeOff className="h-3 w-3 mr-1" />
+                        Inactivo
+                      </>
+                    )}
+                  </span>
+                  <span className="text-xs text-gray-500">
+                    Actualizado: {new Date(product.created_at).toLocaleDateString('es-ES')}
+                  </span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
 
       {filteredProducts.length === 0 && !loading && (
         <div className="text-center py-12">
@@ -663,7 +682,7 @@ const ProductManager = ({ viewMode = 'grid' }) => {
           <p className="text-gray-500 mt-2">
             {searchTerm 
               ? 'No se encontraron productos con esos criterios' 
-              : 'Comienza agregando productos'
+              : 'Comienza agregando productos a tu inventario'
             }
           </p>
         </div>
