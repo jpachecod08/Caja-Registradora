@@ -217,7 +217,10 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
       return;
     }
 
-    const finalTotal = useManualTotal ? parseFloat(manualTotal) : total;
+    // IMPORTANTE: Calcular el total final
+    const baseTotal = useManualTotal ? parseFloat(manualTotal) : total;
+    const finalTotal = baseTotal + parseFloat(deliveryFee || 0);
+    
     if (finalTotal <= 0) {
       toast.error('El total debe ser mayor a cero');
       return;
@@ -226,9 +229,6 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     setIsProcessing(true);
 
     try {
-      // Calcular total con domicilio
-      const totalWithDelivery = finalTotal + parseFloat(deliveryFee || 0);
-
       // Determinar estado de pago
       let paymentStatus = 'pending';
       if (accountType === 'contado') {
@@ -239,9 +239,12 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
 
       console.log('💰 Procesando venta:', {
         customerName,
-        total: totalWithDelivery,
+        baseTotal,
+        deliveryFee,
+        finalTotal,
         accountType,
-        paymentStatus
+        paymentStatus,
+        useManualTotal
       });
 
       // 1. Crear la venta en Supabase
@@ -254,7 +257,7 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
           account_type: accountType,
           product_state: productState,
           delivery_fee: parseFloat(deliveryFee || 0),
-          total_amount: totalWithDelivery,
+          total_amount: finalTotal, // Usar el total final (con domicilio)
           payment_method: paymentMethod,
           payment_status: paymentStatus,
           manual_total: useManualTotal,
@@ -270,14 +273,21 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
 
       console.log('✅ Venta creada:', sale.id);
 
-      // 2. Crear los items de venta en Supabase
+      // 2. Crear los items de venta en Supabase - FIX: Agregar unit_price
+      // Calcular precio unitario estimado dividiendo el total entre la cantidad total
+      const totalQuantity = cart.reduce((sum, item) => sum + item.quantity, 0);
+      const estimatedUnitPrice = totalQuantity > 0 ? (finalTotal / totalQuantity) : 0;
+      
       const saleItems = cart.map(item => ({
         sale_id: sale.id,
         product_id: item.id,
         product_name: item.name,
         quantity: item.quantity,
-        subtotal: 0,
+        unit_price: estimatedUnitPrice, // IMPORTANTE: No puede ser null
+        subtotal: estimatedUnitPrice * item.quantity, // Calcular subtotal
       }));
+
+      console.log('📦 Items a crear:', saleItems);
 
       const { error: itemsError } = await supabase
         .from('sale_items')
@@ -359,6 +369,12 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
     setDeliveryFee(0);
     setUseManualTotal(false);
     setManualTotal(total);
+  };
+
+  // Función para calcular el total a mostrar
+  const calculateDisplayTotal = () => {
+    const baseTotal = useManualTotal ? parseFloat(manualTotal) : total;
+    return baseTotal + parseFloat(deliveryFee || 0);
   };
 
   return (
@@ -684,20 +700,22 @@ const Checkout = ({ cart, total, onSaleComplete }) => {
           <div className="space-y-2">
             <div className="flex justify-between">
               <span className="text-gray-600">Subtotal:</span>
-              <span className="font-medium">$${total.toFixed(2)}</span>
+              <span className="font-medium">
+                ${useManualTotal ? parseFloat(manualTotal).toFixed(2) : total.toFixed(2)}
+              </span>
             </div>
             
             {deliveryFee > 0 && (
               <div className="flex justify-between">
                 <span className="text-gray-600">Domicilio:</span>
-                <span className="font-medium">$${parseFloat(deliveryFee).toFixed(2)}</span>
+                <span className="font-medium">${parseFloat(deliveryFee).toFixed(2)}</span>
               </div>
             )}
             
             <div className="flex justify-between pt-2 border-t border-gray-200">
               <span className="text-lg font-bold text-gray-900">Total a pagar:</span>
               <span className="text-2xl font-bold text-blue-600">
-                $${(total + parseFloat(deliveryFee || 0)).toFixed(2)}
+                ${calculateDisplayTotal().toFixed(2)}
               </span>
             </div>
           </div>

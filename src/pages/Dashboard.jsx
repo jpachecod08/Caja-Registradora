@@ -363,29 +363,54 @@ const Dashboard = () => {
     if (!editingSale) return;
     
     try {
-      const { error } = await supabase
+      console.log('🔄 Actualizando venta:', editingSale.id);
+      
+      // Verificar si el campo updated_at existe en la base de datos
+      const updateData = {
+        customer_name: editForm.customer_name.trim() || 'Cliente ocasional',
+        phone: editForm.phone || null,
+        address: editForm.address || null,
+        total_amount: parseFloat(editForm.total_amount),
+        payment_status: editForm.payment_status,
+        account_type: editForm.account_type,
+        delivery_fee: parseFloat(editForm.delivery_fee),
+        product_state: editForm.product_state,
+      };
+      
+      // Primero intentar con updated_at
+      const { error: updateError } = await supabase
         .from('sales')
         .update({
-          customer_name: editForm.customer_name.trim() || 'Cliente ocasional',
-          phone: editForm.phone || null,
-          address: editForm.address || null,
-          total_amount: parseFloat(editForm.total_amount),
-          payment_status: editForm.payment_status,
-          account_type: editForm.account_type,
-          delivery_fee: parseFloat(editForm.delivery_fee),
-          product_state: editForm.product_state,
+          ...updateData,
           updated_at: new Date().toISOString()
         })
         .eq('id', editingSale.id);
       
-      if (error) throw error;
+      if (updateError) {
+        console.log('⚠️ Error con updated_at, intentando sin él:', updateError.message);
+        
+        // Si falla, intentar sin el campo updated_at
+        const { error: retryError } = await supabase
+          .from('sales')
+          .update(updateData)
+          .eq('id', editingSale.id);
+        
+        if (retryError) throw retryError;
+      }
       
-      toast.success('Venta actualizada correctamente');
+      toast.success('✅ Venta actualizada correctamente');
       setEditingSale(null);
       loadDashboard();
+      
     } catch (error) {
-      console.error('Error actualizando venta:', error);
-      toast.error('Error al actualizar la venta');
+      console.error('❌ Error actualizando venta:', error);
+      
+      // Si el error es específico del campo updated_at, sugerir agregarlo
+      if (error.message?.includes('updated_at')) {
+        toast.error('Error: La tabla sales necesita el campo updated_at. Ejecuta el SQL en Supabase para agregarlo.');
+      } else {
+        toast.error(`Error al actualizar la venta: ${error.message}`);
+      }
     }
   };
 
@@ -412,7 +437,7 @@ const Dashboard = () => {
       
       if (saleError) throw saleError;
       
-      toast.success('Venta eliminada correctamente');
+      toast.success('✅ Venta eliminada correctamente');
       loadDashboard();
     } catch (error) {
       console.error('Error eliminando venta:', error);
@@ -425,21 +450,38 @@ const Dashboard = () => {
     const newStatus = currentStatus === 'paid' ? 'pending' : 'paid';
     
     try {
-      const { error } = await supabase
+      console.log('🔄 Cambiando estado de pago:', saleId, currentStatus, '→', newStatus);
+      
+      const updateData = { 
+        payment_status: newStatus,
+      };
+      
+      // Primero intentar con updated_at
+      const { error: updateError } = await supabase
         .from('sales')
-        .update({ 
-          payment_status: newStatus,
+        .update({
+          ...updateData,
           updated_at: new Date().toISOString()
         })
         .eq('id', saleId);
       
-      if (error) throw error;
+      if (updateError) {
+        console.log('⚠️ Error con updated_at, intentando sin él:', updateError.message);
+        
+        // Si falla, intentar sin el campo updated_at
+        const { error: retryError } = await supabase
+          .from('sales')
+          .update(updateData)
+          .eq('id', saleId);
+        
+        if (retryError) throw retryError;
+      }
       
-      toast.success(`Estado cambiado a ${newStatus === 'paid' ? 'Pagado' : 'Pendiente'}`);
+      toast.success(`✅ Estado cambiado a ${newStatus === 'paid' ? 'Pagado' : 'Pendiente'}`);
       loadDashboard();
     } catch (error) {
-      console.error('Error cambiando estado:', error);
-      toast.error('Error al cambiar estado');
+      console.error('❌ Error cambiando estado:', error);
+      toast.error('Error al cambiar estado de pago');
     }
   };
 
@@ -1107,7 +1149,7 @@ const Dashboard = () => {
                     type="text"
                     value={editForm.customer_name}
                     onChange={(e) => setEditForm({...editForm, customer_name: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Nombre del cliente"
                   />
                 </div>
@@ -1118,7 +1160,7 @@ const Dashboard = () => {
                     type="text"
                     value={editForm.phone}
                     onChange={(e) => setEditForm({...editForm, phone: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Teléfono"
                   />
                 </div>
@@ -1128,31 +1170,31 @@ const Dashboard = () => {
                   <textarea
                     value={editForm.address}
                     onChange={(e) => setEditForm({...editForm, address: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     placeholder="Dirección"
                     rows="2"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Total</label>
+                  <label className="block text-sm font-medium mb-1">Total ($)</label>
                   <input
                     type="number"
                     value={editForm.total_amount}
                     onChange={(e) => setEditForm({...editForm, total_amount: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     step="0.01"
                     min="0"
                   />
                 </div>
                 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Domicilio</label>
+                  <label className="block text-sm font-medium mb-1">Domicilio ($)</label>
                   <input
                     type="number"
                     value={editForm.delivery_fee}
                     onChange={(e) => setEditForm({...editForm, delivery_fee: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                     step="0.01"
                     min="0"
                   />
@@ -1163,7 +1205,7 @@ const Dashboard = () => {
                   <select
                     value={editForm.payment_status}
                     onChange={(e) => setEditForm({...editForm, payment_status: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="pending">Pendiente</option>
                     <option value="paid">Pagado</option>
@@ -1175,7 +1217,7 @@ const Dashboard = () => {
                   <select
                     value={editForm.account_type}
                     onChange={(e) => setEditForm({...editForm, account_type: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="contado">Contado</option>
                     <option value="credito">Crédito</option>
@@ -1187,7 +1229,7 @@ const Dashboard = () => {
                   <select
                     value={editForm.product_state}
                     onChange={(e) => setEditForm({...editForm, product_state: e.target.value})}
-                    className="input-field w-full"
+                    className="w-full px-4 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
                   >
                     <option value="congelado">Congelado</option>
                     <option value="frito">Frito</option>
@@ -1197,13 +1239,13 @@ const Dashboard = () => {
                 <div className="flex gap-2 pt-4">
                   <button
                     onClick={() => setEditingSale(null)}
-                    className="flex-1 btn-secondary"
+                    className="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={saveEditedSale}
-                    className="flex-1 btn-primary flex items-center justify-center gap-2"
+                    className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center justify-center gap-2"
                   >
                     <Save className="h-4 w-4" />
                     Guardar
